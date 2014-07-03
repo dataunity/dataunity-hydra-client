@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html ng-app="dataunity-hydra">
+<head>
+    <title>Hydra Client</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.0-beta.13/angular.min.js"></script>
+    <script src="../js/jsonld.js"></script>
+    <script src="../js/dataunity-hydraclient-0.1.0.js"></script>
+</head>
+<body>
+    <h1>Hydra Client</h1>
+    <div id="du-error"></div>
+    <div ng-controller="HydraCtrl" ng-init="loadPage('http://0.0.0.0:6543/hydra/entrypoint')">
+        <h2>{{title}}</h2>
+        <div ng-repeat="link in links">
+            {{getLiteralValue(link.prop, rdfsNs.label)}}
+            <span ng-if="hasGET(link.prop)">
+                <a href="#" ng-click="loadPage(link.url)">Open</a>
+            </span>
+            <span ng-if="hasPOST(link.prop)">
+                <a href="#" ng-click="loadForm(link.url, link.prop)">Create</a>
+            </span>
+        </div>
+    </div>
+</body>
+</html> 
