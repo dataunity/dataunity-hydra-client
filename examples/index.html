@@ -11,15 +11,28 @@
     <div id="du-error"></div>
     <div ng-controller="HydraCtrl" ng-init="loadPage('http://0.0.0.0:6543/hydra/entrypoint')">
         <h2>{{title}}</h2>
-        <div ng-repeat="link in links">
+        <div ng-repeat="link in links" ng-show="areLinksVisible">
             {{getLiteralValue(link.prop, rdfsNs.label)}}
             <span ng-if="hasGET(link.prop)">
                 <a href="#" ng-click="loadPage(link.url)">Open</a>
             </span>
             <span ng-if="hasPOST(link.prop)">
-                <a href="#" ng-click="loadForm(link.url, link.prop)">Create</a>
+                <a href="#" ng-click="showForm(link.url, link.prop, 'POST')">Create</a>
             </span>
         </div>
+
+        <form name="du-form-hydra" action="{{formURL}}" method="{{formMethod}}" ng-show="isFormVisible">
+            <span ng-repeat="suppProp in hydraForm.data.fields">
+                <label for="{{getSupportedPropertyPropertyId(suppProp)}}">
+                    {{getSupportedPropertyLabel(suppProp)}}
+                </label>
+                <input name="{{getSupportedPropertyPropertyId(suppProp)}}" 
+                    type="text" 
+                    data-ng-model="suppProp.data"
+                    value="">
+            </span>
+            <p><button ng-click="submitForm()">Add</button></p>
+        </form>
     </div>
 </body>
 </html> 
