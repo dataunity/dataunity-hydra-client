@@ -2,11 +2,15 @@ AnguarJS Hydra Client
 =====================
 
 *Warning: Work in progress. Not suitable for production use (yet).*
-*Major Issue: The API Document rel link hasn't been implemented yet (the client reads the API Doc from a static URL).*
-*Major Issue: The client is untested against any other API other than the Data Unity one.*
-*Major Issue: The client has not tests (sorry!).*
+**Major Issue: The API Document rel link hasn't been implemented yet (the client reads the API Doc from a static URL).**
+
+**Major Issue: The client is untested against any other API other than the Data Unity one.**
+
+**Major Issue: The client has no tests (sorry!).**
 
 This Hydra client is designed to give a Single Page Application interface to a Hydra Hypermedia API.
+
+If the client is to be used with an API hosted on a different URL, CORs headers will need to be added to the API endpoints.
 
 Why do we need another Hydra client?
 ------------------------------------
