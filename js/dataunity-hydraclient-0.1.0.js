@@ -137,72 +137,74 @@ angular.module('duConfig', ['duRouteResolverService'])
         this.setEntryPoint = function (entryPointIRI) {
             this.entryPointIRI = entryPointIRI;
         };
+    })
+
+    // Configure the styling APIDoc (for specifying UI display options)
+    .provider('uiAPIDoc', function () {
+        this.uiAPIDoc = {};
+
+        this.$get = function () {
+            return this;
+        };
+
+        this.getUIAPIDoc = function () {
+            return this.uiAPIDoc;
+        };
+
+        this.setUIAPIDoc = function (uiAPIDoc) {
+            _this = this;
+            // ToDo: preferably have jsonld dependency in a
+            // AngularJS wrapper like with duHydraClient
+
+            // ToDo: AngularJS wont know to wait until the
+            // expand callback is returned. Is there a way
+            // to make sure config isn't complete until the
+            // callback is returned?
+            jsonld.expand(uiAPIDoc, function(err, expanded) {
+                if (err) {
+                    throw err;
+                }
+                expanded = angular.isArray(expanded) ? expanded[0] : expanded;
+                _this.uiAPIDoc = expanded;
+            });
+            this.uiAPIDoc = uiAPIDoc;
+        };
     });
 
 angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'])
 
+    // -------
+    // Config
+    // -------
     .config(['$routeProvider', 'entryPointProvider', 'routeResolverProvider', 
         function($routeProvider, entryPointProvider, routeResolverProvider) {
+
+        // Setup routes
         var route = routeResolverProvider.route;
 
         $routeProvider
             // Route for item view
-            .when('/view/:iri*', {
-                template: '<div ng-init="load()"> \
-                <h2>{{title}}</h2> \
-                <du-item ng-repeat="item in pageItems"></du-item> \
-                </div>',
-                controller: 'ItemViewCtrl'
+            .when('/item/:iri*', {
+                controller: 'ResourceRouteCtrl',
+                template: '<du-hydra-view contentstype="item" \
+                    resourceiri="{{iri}}" \
+                    viewname="default"></du-hydra-view>'
             })
             // Route for collection view
             .when('/collection/:iri*', {
-                template: '<div ng-init="load()"> \
-                <h2>Title: {{title}}</h2> \
-                <div ng-repeat="member in members" class="du-member"> \
-                    <du-item ng-repeat="item in member.pageItems"></du-item> \
-                </div> \
-                </div>',
-                controller: 'CollectionCtrl'
+                controller: 'ResourceRouteCtrl',
+                template: '<du-hydra-view contentstype="collection" \
+                    resourceiri="{{iri}}" \
+                    viewname="default"></du-hydra-view>'
             })
             // Route for form view
             .when('/form/:formId*', {
-                template: '<div ng-init="load()"> \
-                <h2>Form: {{title}}</h2> \
-                <ng-form name="du-form-hydra" action="{{formURL}}" method="{{formMethod}}"> \
-                    <div ng-repeat="suppProp in hydraForm.data.fields"> \
-                        <input ng-if="suppProp._hidden" \
-                            name="{{getSupportedPropertyPropertyId(suppProp)}}" \
-                            type="hidden" \
-                            data-ng-model="suppProp.data" \
-                            value="{{getSupportedPropertyValue(suppProp)}}"> \
-                        <div ng-if="!suppProp._hidden"> \
-                            <label for="{{getSupportedPropertyPropertyId(suppProp)}}"> \
-                                {{getSupportedPropertyLabel(suppProp)}} \
-                            </label> \
-                            <input ng-if="!suppProp._hasChoice" \
-                                name="{{getSupportedPropertyPropertyId(suppProp)}}" \
-                                type="text" \
-                                data-ng-model="suppProp.data" \
-                                value="{{getSupportedPropertyValue(suppProp)}}"> \
-                            <select ng-if="suppProp._hasChoice" \
-                                name="{{getSupportedPropertyPropertyId(suppProp)}}" \
-                                type="text" \
-                                data-ng-model="suppProp.data" \
-                                ng-options="color.name for color in suppProp._choices" \
-                                value="{{getSupportedPropertyValue(suppProp)}}"> \
-                            </select> \
-                        </div> \
-                    </div> \
-                    <du-item ng-repeat="item in formItems"></du-item> \
-                    <div><button ng-click="submitForm()">Add</button></div> \
-                    <div du-form-feedback></div> \
-                </ng-form> \
-                </div>',
-                controller: 'FormCtrl'
+                controller: 'FormRouteCtrl',
+                template: '<du-hydra-view contentstype="form" formid="{{formId}}"></du-hydra-view>'
             })
             // Homepage
             .when('/', {
-                redirectTo: '/view/' + encodeURIComponent(entryPointProvider.getEntryPoint())
+                redirectTo: '/item/' + encodeURIComponent(entryPointProvider.getEntryPoint())
             });
             // ToDo: redirect to 404
             // .otherwise({
@@ -216,7 +218,30 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         });
     }])
 
-    .factory('hydraNs', function() {
+    // Controller to set resource id for route based navigation
+    .controller('ResourceRouteCtrl', ['$scope', '$routeParams', 
+        function($scope, $routeParams) {
+            // Simple controller to make route parameter available
+            // to Hydra view
+            var resourceIRI = decodeURIComponent($routeParams.iri);
+            $scope.iri = resourceIRI;
+    }])
+
+    // Controller to set resource id for route based navigation
+    .controller('FormRouteCtrl', ['$scope', '$routeParams', 
+        function($scope, $routeParams) {
+            // Simple controller to make route parameter available
+            // to Hydra view
+            $scope.formId = $routeParams.formId;
+            $scope.contentsType = "form";
+    }])
+
+
+    // ---------------
+    // RDF Namespaces
+    // ---------------
+
+    .factory('hydraNs', function () {
         // Hydra namespace
         var hydraBase = 'http://www.w3.org/ns/hydra/core#';
         return {
@@ -238,7 +263,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
     })
 
-    .factory('hydraExtNs', function() {
+    .factory('hydraExtNs', function () {
         // Data Unity Hydra extensions namespace
         var hydraBase = 'http://dataunity.org/ns/hydra-ext#';
         return {
@@ -252,7 +277,21 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
     })
 
-    .factory('rdfNs', function() {
+    .factory('hydraUINs', function () {
+        // Data Unity Hydra extensions namespace for styling
+        // the UI
+        hydraUIBase = "http://dataunity.org/ns/hydra-ui#"
+        return {
+            _base: hydraUIBase,
+            swapContent: hydraUIBase + "swapContent",
+            PostForm: hydraUIBase + "PostForm",
+            orderId: hydraUIBase + "orderId",
+            cssClass: hydraUIBase + "cssClass",
+            labelInfo: hydraUIBase + "labelInfo"
+        };
+    })
+
+    .factory('rdfNs', function () {
         // RDF namespace
         var rdfBase = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
         return {
@@ -260,16 +299,43 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
     })
 
-    .factory('rdfsNs', function() {
+    .factory('rdfsNs', function () {
         // RDFS namespace
         var rdfsBase = 'http://www.w3.org/2000/01/rdf-schema#';
         return {
-            label: rdfsBase + "label"
+            label: rdfsBase + "label",
+            subClassOf: rdfsBase + "subClassOf"
         };
     })
 
+    .factory('oslcNs', function () {
+        // OSLC - Resource Shapes namespace (http://www.w3.org/Submission/2014/SUBM-shapes-20140211)
+        var oslcBase = "http://open-services.net/ns/core#";
+        return {
+            instanceShape: oslcBase + "instanceShape",
+            resourceShape: oslcBase + "resourceShape",
+            ResourceShape: oslcBase + "ResourceShape",
+            describes: oslcBase + "describes",
+            property: oslcBase + "property",
+            Property: oslcBase + "Property",
+            propertyDefinition: oslcBase + "propertyDefinition",
+            name: oslcBase + "name",
+            occurs: oslcBase + "occurs",
+            ExactlyOne: oslcBase + "Exactly-one",
+            ZeroOrOne: oslcBase + "Zero-or-one",
+            OneOrMany: oslcBase + "One-or-many",
+            ZeroOrMany: oslcBase + "Zero-or-many",
+            allowedValues: oslcBase + "allowedValues",
+            allowedValue: oslcBase + "allowedValue",
+            readOnly: oslcBase + "readOnly"
+        }
+    })
+
+    // ----------------
+    // JSON-LD Helpers
+    // ----------------
+
     .factory('jsonldLib', function () {
-        // JSON-LD namespace
         // A simple wrapper for the jsonld library dependency
         return jsonld;
     })
@@ -317,7 +383,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             },
 
             // Checks whether obj has JSON-LD value (@value)
-            isValue = function (val) {
+            hasValue = function (val) {
                 var toCheck = val;
                 if (angular.isArray(val) && val.length === 1) {
                     toCheck = val[0];
@@ -329,19 +395,34 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             // around JSON results
             removeJSONArray = function (obj) {
                 return angular.isArray(obj) ? obj[0] : obj;
+            },
+
+            isNullOrUndefined = function (obj) {
+                return typeof obj === 'undefined' || obj === null;
+            },
+            isNotNullOrUndefined = function (obj) {
+                return !isNullOrUndefined(obj);
             };
         return {
             getValue: getValue,
             getLiteralValue: getLiteralValue,
             getIdValue: getIdValue,
             hasId: hasId,
-            isValue: isValue,
-            removeJSONArray: removeJSONArray
+            hasValue: hasValue,
+            removeJSONArray: removeJSONArray,
+            isNullOrUndefined: isNullOrUndefined,
+            isNotNullOrUndefined: isNotNullOrUndefined
         }
     }])
 
+
+    // --------------
+    // Hydra helpers
+    // --------------
+
     // Helper for Hydra API Documentation
-    .factory('apiDocHelper', ['rdfsNs', 'hydraNs', 'jsonldHelper', function (rdfsNs, hydraNs, jsonldHelper) {
+    .factory('apiDocHelper', ['rdfsNs', 'hydraNs', 'jsonldLib', 'jsonldHelper', 
+        function (rdfsNs, hydraNs, jsonldLib, jsonldHelper) {
 
         var getProperty = function (suppProp) {
                 // Gets the property from a SupportedProperty.
@@ -422,26 +503,145 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
                 return apiDocSuppProp;
             },
+            // Get's an available label for the object
+            getLabel = function (obj, defaultVal) {
+                var defaultLabel = "Untitled",
+                    label = "";
+                if (typeof defaultVal !== "undefined") {
+                    defaultLabel = defaultVal;
+                }
+                if (jsonldHelper.isNullOrUndefined(obj)) {
+                    return defaultLabel;
+                }
+                label = jsonldHelper.getLiteralValue(obj, hydraNs.title);
+                if (jsonldHelper.isNullOrUndefined(label)) {
+                    label = jsonldHelper.getLiteralValue(obj, rdfsNs.label);
+                }
+                if (jsonldHelper.isNullOrUndefined(label)) {
+                    label = defaultLabel;
+                }
+                return label;
+            },
             getSupportedPropertyLabel = function (suppProp) {
-                var label = jsonldHelper.getLiteralValue(suppProp, hydraNs.title),
+                var label = getLabel(suppProp),
                     prop = null;
 
-                if (typeof label === 'undefined' || label == null) {
-                    var prop = getProperty(suppProp);
+                if (jsonldHelper.isNullOrUndefined(label)) {
+                    prop = getProperty(suppProp);
                     if (prop == null) {
                         label = "Untitled";
                     } else {
-                        label = jsonldHelper.getLiteralValue(prop, rdfsNs.label);
+                        label = getLabel(prop, "Untitled");
                     }
                 }
                 return label;
+                // var label = jsonldHelper.getLiteralValue(suppProp, hydraNs.title),
+                //     prop = null;
+
+                // if (typeof label === 'undefined' || label == null) {
+                //     var prop = getProperty(suppProp);
+                //     if (prop == null) {
+                //         label = "Untitled";
+                //     } else {
+                //         label = jsonldHelper.getLiteralValue(prop, rdfsNs.label);
+                //     }
+                // }
+                // return label;
+            },
+            // Finds whether the SupportedClass is a rdfs sub type of one of
+            // the base classes supplied
+            isSubClassOf = function (apiDoc, classIRI, baseClassIRIs) {
+                // Find the class in API Doc
+                var apiDoc = jsonldHelper.removeJSONArray(apiDoc),
+                    suppClass = findSupportedClass(apiDoc, classIRI),
+                    baseClass = "",
+                    isSubClass = false;
+
+                if (jsonldHelper.isNullOrUndefined(suppClass)) {
+                    return false;
+                }
+
+                baseClass = suppClass[rdfsNs.subClassOf];
+
+                if (baseClass) {
+                    typesToCheck = angular.isArray(baseClass) ? baseClass : [baseClass];
+                    baseClassIRIs = angular.isArray(baseClassIRIs) ? baseClassIRIs : [baseClassIRIs];
+                    angular.forEach(typesToCheck, function (typeToCheck) {
+                        var iriToCheck = typeToCheck;
+                        if (jsonldHelper.hasId(iriToCheck)) {
+                            iriToCheck = jsonldHelper.getIdValue(iriToCheck);
+                        }
+                        angular.forEach(baseClassIRIs, function (baseClassIRI) {
+                            if (iriToCheck === baseClassIRI) {
+                                isSubClass = true;
+                            }
+                        });
+                    });
+                }
+
+                return isSubClass;
+            },
+            // Finds a SupportedOperation in the SupportedProperty
+            // with the given form method
+            findSupportedOperationWithMethod = function (suppProp, method) {
+                var suppOps, prop, suppOp = null;
+                if (jsonldHelper.isNullOrUndefined(suppProp)) {
+                    return suppOp;
+                }
+                prop = getProperty(suppProp);
+                if (jsonldHelper.isNullOrUndefined(prop)) {
+                    return suppOp;
+                }
+                suppOps = prop[hydraNs.supportedOperation];
+                if (jsonldHelper.isNullOrUndefined(suppOps)) {
+                    return suppOp;
+                }
+                angular.forEach(suppOps, function (tmpSuppOp, ind) {
+                    var methodVal = jsonldHelper.getLiteralValue(tmpSuppOp, hydraNs.method);
+                    if (jsonldHelper.isNotNullOrUndefined(methodVal)) {
+                        if (methodVal === method) {
+                            suppOp = tmpSuppOp;
+                            // ToDo: inefficiency as loop doesn't exit
+                        }
+                    }
+                });
+                return suppOp;
+            },
+            // Whether the hydra SupportedOpertation returns a collection
+            supportedOperationReturnsCollection = function (apiDoc, suppOp) {
+                var isCollection = false,
+                    returnsTypes, tmp;
+                if (!suppOp) {
+                    return false;
+                }
+                returnsTypes = jsonldLib.getValues(suppOp, hydraNs.returns);
+                angular.forEach(returnsTypes, function (returnType) {
+                    tmp = jsonldHelper.getIdValue(returnType);
+                    if (tmp === hydraNs.Collection || tmp === hydraNs.PagedCollection) {
+                        isCollection = true;
+                    } else {
+                        if (!isCollection) {
+                            // Check if type is sub class of collection
+                            if (isSubClassOf(apiDoc, tmp, 
+                                [hydraNs.Collection, hydraNs.PagedCollection])) {
+                                isCollection = true;
+                            }
+                        }
+                    }
+                    
+                });
+                return isCollection;
             };
 
         return {
             getProperty: getProperty,
+            getLabel: getLabel,
             findSupportedClass: findSupportedClass,
             findSupportedProperty: findSupportedProperty,
-            getSupportedPropertyLabel: getSupportedPropertyLabel
+            findSupportedOperationWithMethod: findSupportedOperationWithMethod,
+            getSupportedPropertyLabel: getSupportedPropertyLabel,
+            isSubClassOf: isSubClassOf,
+            supportedOperationReturnsCollection: supportedOperationReturnsCollection
         }
     }])
 
@@ -483,51 +683,68 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             }
             return suppOp;
         };
-
-        // Whether the hydra:property has the operation method
-        this.hasOperationMethod = function (prop, method) {
-            var suppOp = this.getSupportedOperation(prop, method);
-            return suppOp ? true : false;
-        };
-
-        // Whether the hydra opertation returns a collection
-        this.operationReturnsCollection = function (prop, method) {
-            var suppOp = this.getSupportedOperation(prop, method),
-                isCollection = false,
-                returnsTypes, tmp;
-            if (!suppOp) {
-                return false;
-            }
-            returnsTypes = jsonldLib.getValues(suppOp, hydraNs.returns);
-            angular.forEach(returnsTypes, function (returnType) {
-                tmp = jsonldHelper.getIdValue(returnType);
-                if (tmp === hydraNs.Collection || tmp === hydraNs.PagedCollection) {
-                    isCollection = true;
-                }
-            })
-            return isCollection;
-        };
     }])
 
     .factory('apiResources', ['$http', '$log', '$q',
         function($http, $log, $q) {
         // Dependencies
         var jsonLd = jsonld,
-            jsonldPromises = jsonld.promises();
+            jsonldPromises = jsonld.promises(),
+            getAPIDocIRI = function (headers) {
+                // Finds API Documentation IRI from Link header.
+                // See http://lists.w3.org/Archives/Public/public-hydra/2014May/0003.html
+                // "you would reference the API documentation via an HTTP Link header"
+                // Note: AngularJS seems to convert header name to lower case
+                var link = headers()["link"],
+                    apiDocIRI = null,
+                    linkParts;
+                if (typeof link === "undefined") {
+                    $log.info("Resource doesn't have Hydra API Documentation Link.");
+                } else {
+                    linkParts = link.split("rel=");
+                    if (linkParts.length === 2 && 
+                        linkParts[1].trim() === '"http://www.w3.org/ns/hydra/core#apiDocumentation"') {
+                        apiDocIRI = linkParts[0].trim();
+                        if (apiDocIRI.length > 0 && apiDocIRI[apiDocIRI.length - 1] === ";") {
+                            apiDocIRI = apiDocIRI.substr(0, apiDocIRI.length - 1).trim();
+                        }
+                        if (apiDocIRI.length > 0 && apiDocIRI[0] === "<") {
+                            apiDocIRI = apiDocIRI.substr(1);
+                        }
+                        if (apiDocIRI.length > 0 && apiDocIRI[apiDocIRI.length - 1] === ">") {
+                            apiDocIRI = apiDocIRI.substr(0, apiDocIRI.length - 1);
+                        }
+                    }
+                }
+
+                console.log("link apiDocIRI", apiDocIRI)
+
+                if (apiDocIRI == null) {
+                    // ToDo: turn this into an error?
+                    $log.info("Resource doesn't have Hydra API Documentation Link.");
+                    // Hack: static url 
+                    apiDocIRI = '/hydra/api-doc';
+                }
+                return apiDocIRI;
+            };
         return {
             getResource: function(iri) {
                 var deferred = $q.defer();
                 $http.get(iri, {headers: {"Accept": "application/json"}})
-                    .success(function(data) {
+                    .success(function(data, status, headers, config) {
+                        var apiDocIRI;
+                        try {
+                            apiDocIRI = getAPIDocIRI(headers);
+                        } catch (err) {
+                            deferred.reject("Can't get API Documentation IRI. " + err.message);
+                        }
+                        
                         // Expand the context
                         jsonldPromises.expand(data)
                             .then(function (expanded) {
-                                // ToDo: find API Doc from entry point context
-                                // See: http://lists.w3.org/Archives/Public/public-hydra/2014May/0003.html
-                                // "you would reference the API documentation via an HTTP Link header"
                                 deferred.resolve({
                                     data: expanded, 
-                                    apiDocURL: '/hydra/api-doc'});
+                                    apiDocURL: apiDocIRI});
                             }, 
                             function (err) {
                                 deferred.reject("There was an error expanding the Resource data: " + err.name + " " + err.message);
@@ -542,14 +759,17 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             getResourceNonExpanded: function(iri) {
                 var deferred = $q.defer();
                 $http.get(iri, {headers: {"Accept": "application/json"}})
-                    .success(function(data) {
-                        // Expand the context
-                        // ToDo: find API Doc from entry point context
-                        // See: http://lists.w3.org/Archives/Public/public-hydra/2014May/0003.html
-                        // "you would reference the API documentation via an HTTP Link header"
+                    .success(function(data, status, headers, config) {
+                        var apiDocIRI;
+                        try {
+                            apiDocIRI = getAPIDocIRI(headers);
+                        } catch (err) {
+                            deferred.reject("Can't get API Documentation IRI. " + err.message);
+                        }
+                        
                         deferred.resolve({
                             data: data, 
-                            apiDocURL: '/hydra/api-doc'});
+                            apiDocURL: apiDocIRI});
                     }).error(function(msg, code) {
                         deferred.reject(msg);
                         $log.error(msg, code);
@@ -578,14 +798,21 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         }
     }])
 
+
+    // -----------
+    // Form store
+    // -----------
+    // This stores form information between switches in views.
+    // It uses an id to retrieve the form information
     .factory('formStore', function () {
         // Store temp detail for making a form
         var formData = {},
-            saveFormData = function (method, url, data, suppClass) {
+            saveFormData = function (method, url, resourceIRI, data, suppClass) {
                 var id = method + "_" + url + "_" + suppClass["@id"];
                 formData[id] = {
                     method: method,
                     url: url,
+                    resourceIRI: resourceIRI,
                     data: data,
                     suppClass: suppClass
                 };
@@ -601,10 +828,18 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         }
     })
 
-    .factory('pageBuilder', ['jsonldLib', 'jsonldHelper', 'hydraNs', 'apiDocHelper', 'hydraHelper', 'routeResolver', 'formStore', 
-        function (jsonldLib, jsonldHelper, hydraNs, apiDocHelper, hydraHelper, routeResolver, formStore) {
 
-        var saveForm = function (apiDoc, suppOp, method, formURL, formData) {
+    // -------------
+    // Page builder
+    // -------------
+    // Page builder manages 'page items', which are simple wrappers around
+    // Hydra information to make things easier to display in the UI
+    .factory('pageBuilder', ['jsonldLib', 'jsonldHelper', 'hydraNs', 'rdfNs', 'hydraUINs',
+        'apiDocHelper', 'hydraHelper', 'uiAPIDocHelper', 'routeResolver', 'formStore',
+        function (jsonldLib, jsonldHelper, hydraNs, rdfNs, hydraUINs,
+            apiDocHelper, hydraHelper, uiAPIDocHelper, routeResolver, formStore) {
+
+        var saveForm = function (apiDoc, suppOp, method, formURL, resourceIRI, formData) {
             // Saves the form details to pass to form page
             var payloadTypes = [],
                 payloadClass = null,
@@ -627,17 +862,22 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 throw "Could not find form's Hydra API class for " + String(payloadTypes);
             }
 
-            var savedFormId = formStore.saveFormData(method, formURL, formData, payloadClass);
+            var savedFormId = formStore.saveFormData(method, formURL, resourceIRI, formData, payloadClass);
             return savedFormId;
         },
-
+        // Puts Hydra and page data into a wrapper to make things easier for 
+        // the UI to consume
         addPageItems = function (pageItemCollection, pageData, apiDoc, pageTypes) {
             // pageItemCollection is the collection that will be added to
-            var suppProp, prop, pageItemValue;
-            angular.forEach(pageData, function (value, key) {
+            pageItems = [];
+            angular.forEach(pageData, function (itemValue, key) {
+                var value, suppProp, prop, propTypes, propType, propId, resourceIRI, suppClass,
+                    propertyValue, pageItem;
+
                 if (key.indexOf("@") === 0) {
                     return;
                 } else {
+                    value = angular.isArray(itemValue) && itemValue.length > 0 ? itemValue[0] : itemValue;
                     suppProp = apiDocHelper.findSupportedProperty(apiDoc, pageTypes, key);
                     if (suppProp == null) {
                         throw "Could not find SupportedProperty " + String(key) + 
@@ -645,79 +885,329 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                     }
                     prop = apiDocHelper.getProperty(suppProp);
 
-                    if (jsonldHelper.isValue(value)) {
-                        value = angular.isArray(value) && value.length > 0 ? value[0] : value;
-                        pageItemValue = jsonldHelper.getLiteralValue(value, "@value");
-                    } else {
-                        pageItemValue = jsonldHelper.getIdValue(value);
-                    }
-                    
-                    var propTypes = prop["@type"];
-                    var pageItemType = hydraHelper.hydraType(propTypes);
-                    if (pageItemType == null) {
+                    // Get the property @type and @id
+                    propTypes = prop["@type"];
+                    propType = hydraHelper.hydraType(propTypes);
+                    if (propType == null) {
                         // No specific hydra type, like Link. Try other types
                         if (propTypes && angular.isArray(propTypes) && propTypes.length > 0) {
-                            pageItemType = propTypes[0];
+                            propType = propTypes[0];
                         }
                     }
+                    propId = jsonldHelper.hasId(prop) ? jsonldHelper.getIdValue(prop) : null;
+                    // propType = prop["@type"];
+                    // propType = propType && angular.isArray(propType) ? propType[0] : propType;
 
-                    var suppClass = pageTypes[0];
+                    // console.log('prop["@type"]')
+                    // console.log(propType)
+                    //if (suppProp["@type"])
 
-                    pageItemCollection.push({
-                        "type": pageItemType,
-                        "value": pageItemValue,
+                    // if (jsonldHelper.hasValue(value)) {
+                    //     value = angular.isArray(value) && value.length > 0 ? value[0] : value;
+                    //     pageItemValue = jsonldHelper.getLiteralValue(value, "@value");
+                    // } else {
+                    //     pageItemValue = jsonldHelper.getIdValue(value);
+                    // }
+
+                    // Store resource IRI
+                    // console.log("looking to store resource iri for key " + key)
+                    //if (jsonldHelper.hasId(value)) {
+                    if (propType === hydraNs.Link) {
+                        resourceIRI = jsonldHelper.getIdValue(value);
+                        propertyValue = null;
+                    } else if (propType === rdfNs.Property) {
+                        resourceIRI = null;
+                        if (jsonldHelper.hasValue(value)) {
+                            propertyValue = jsonldHelper.getLiteralValue(value, "@value");
+                        } else {
+                            propertyValue = "Unknown";
+                        }
+                    } else {
+                        resourceIRI = null;
+                        propertyValue = "Unknown";
+                    }
+                    // console.log("link resourceIRI")
+                    // console.log(resourceIRI)
+
+                    // Place the information about Hydra Link/Property into
+                    // a convenient wrapper for the UI
+                    suppClass = pageTypes[0];
+                    pageItem = {
+                        "type": propType,
+                        "value": propertyValue,
+                        "resourceIRI": resourceIRI,
                         "prop": prop,
                         "suppProp": suppProp,
                         "suppClass": suppClass
-                    });
+                    };
+
+                    // Find out if there's any UI styling overrides
+                    var suppPropUI = uiAPIDocHelper.supportedPropertyOptions(suppClass, propId);
+                    if (suppPropUI) {
+                        var orderId = jsonldHelper.getLiteralValue(suppPropUI, hydraUINs.orderId, null),
+                            uiProp = apiDocHelper.getProperty(suppPropUI),
+                            uiSuppOps = uiProp[hydraNs.supportedOperation],
+                            swapContentInfo = suppPropUI[hydraUINs.swapContent],
+                            suppOps;
+
+                        console.log("Supp op ui", uiProp[hydraNs.supportedOperation])
+
+                        // Ordering of SupportedProperties
+                        if (jsonldHelper.isNotNullOrUndefined(orderId)) {
+                            pageItem._orderId = orderId;
+                        }
+
+                        if (uiSuppOps) {
+                            // There is some information about SupportedOperations so
+                            // markup the suppOps in pageItem
+                            console.log("Has UI suppOp info")
+                            suppOps = prop[hydraNs.supportedOperation];
+                            angular.forEach(suppOps, function (suppOp) {
+                                var method = jsonldHelper.getLiteralValue(suppOp, hydraNs.method),
+                                    uiSuppOp = apiDocHelper.findSupportedOperationWithMethod(suppPropUI, method),
+                                    cssClass;
+                                console.log("Using suppOp info", uiSuppOp)
+                                if (uiSuppOp) {
+                                    cssClass = jsonldHelper.getLiteralValue(uiSuppOp, hydraUINs.cssClass, null);
+                                    if (jsonldHelper.isNotNullOrUndefined(cssClass)) {
+                                        console.log("CssClass", cssClass)
+                                        suppOp._cssClass = cssClass;
+                                    }
+                                }
+                            });
+                        }
+
+                        if (swapContentInfo) {
+                            // Swap out SupportedProperty for different content
+                            swapContentInfo = angular.isArray(swapContentInfo) ? swapContentInfo[0] : swapContentInfo;
+                            swapContentType = angular.isArray(swapContentInfo["@type"]) ? swapContentInfo["@type"][0] : swapContentInfo["@type"];
+                            // Find out what to swap in place of the SupportedProperty
+                            if (swapContentType === hydraUINs.PostForm) {
+                                // Swap with POST Form
+                                console.log("Swap form resource iri", resourceIRI)
+                                var method = "POST",
+                                    op = apiDocHelper.findSupportedOperationWithMethod(suppProp, method), 
+                                    formURL = resourceIRI, 
+                                    formData = null, 
+                                    formId;
+                                if (jsonldHelper.isNullOrUndefined(op)) {
+                                    throw "Expected UI swap content override property to have a POST operation."
+                                }
+                                pageItem._swapType = "form";
+                                formId = saveForm(apiDoc, op, method, formURL, resourceIRI, formData);
+                                pageItem._formId = formId;
+                                console.log("TODO: Create form")
+                            }
+                        }
+                        
+                    }
+
+                    // pageItemCollection.push(pageItem);
+                    pageItems.push(pageItem);
                 }
             });
-        },
 
-        // Determines the link for the pageItem
-        pageItemLink = function (pageItem) {
-            var suppClass = pageItem.suppClass,
-                getPath = routeResolver.routeConfig.getPath,
-                suppOp, routePath;
-            // ToDo: this needs refactorting so more than one
-            // GET SuppOp can be handled
-            if (hydraHelper.hasOperationMethod(pageItem.prop, "GET")) {
-                // HTTP GET
-                suppOp = hydraHelper.getSupportedOperation(pageItem.prop, "GET");
-                routePath = getPath(suppClass, suppOp["@id"]);
-                if (routePath != null) {
-                    // User defined view for this SupportedClass and SupportedOp
-                    // Bit of a hack to insert target IRI
-                    return "#" + routePath.replace(":iri*", encodeURIComponent(pageItem.value));
-                } else if (hydraHelper.operationReturnsCollection(pageItem.prop, "GET")) {
-                    return "#/collection/" + encodeURIComponent(pageItem.value);
-                } else {
-                    return "#/view/" + encodeURIComponent(pageItem.value);
-                }
-            } else {
-                throw "Only GET requests supported here.";
-            }
-        },
+            // Sort the items by orderId
+            pageItems.sort(function (lhs, rhs) {
+                var lhsOrderId = jsonldHelper.isNullOrUndefined(lhs._orderId) ? 0 : lhs._orderId,
+                    rhsOrderId = jsonldHelper.isNullOrUndefined(rhs._orderId) ? 0 : rhs._orderId;
+                return lhsOrderId - rhsOrderId;
+            })
 
-        // Determines the text to use for a pageItem link
-        pageItemLinkText = function (pageItem) {
-            if (hydraHelper.hasOperationMethod(pageItem.prop, "GET")) {
-                // HTTP GET
-                return "Go";
-            } else if (hydraHelper.hasOperationMethod(pageItem.prop, "POST")) {
-                // HTTP POST
-                return "Create";
-            } else {
-                throw "Unknown Link type";
-            }
+            // Add items to pageItems collection
+            angular.forEach(pageItems, function (pageItem) {
+                pageItemCollection.push(pageItem);
+            });
         };
 
         return {
             saveForm: saveForm,
-            addPageItems: addPageItems,
-            pageItemLink: pageItemLink,
-            pageItemLinkText: pageItemLinkText
+            addPageItems: addPageItems
         }
+    }])
+
+
+    // -------------
+    // Styling info
+    // -------------
+    // Helper for looking up styling information contained in the
+    // optional config setting. Uses a structure similar to Hydra
+    // APIDoc, but with UI styling options instead.
+    .factory('uiAPIDocHelper', ['uiAPIDoc', 'hydraNs', 'apiDocHelper',
+        function (uiAPIDoc, hydraNs, apiDocHelper) {
+
+        var supportedPropertyOptions = function (hydraClassId, hydraPropId) {
+                var apiDocUI = uiAPIDoc.getUIAPIDoc(),
+                    suppPropOptions = apiDocHelper.findSupportedProperty(apiDocUI, hydraClassId, hydraPropId);
+                // console.log("suppProp:");
+                // console.log(suppProp);
+                return suppPropOptions || null;
+            };
+
+        return {
+            supportedPropertyOptions: supportedPropertyOptions
+        };
+    }])
+
+
+    // -------------
+    // Hydra views
+    // -------------
+
+    // Service for managing Hydra views
+    .factory('hydraViews', ['jsonldLib', function (jsonldLib) {
+        var views = {},
+            registerView = function (name, scope) {
+                console.log("Registering view", name)
+                return views[name] = scope;
+            },
+            changeView = function (name, contentsType, resourceIRI) {
+                var scope = views[name];
+                if (typeof scope === "undefined" || scope === null) {
+                    throw "No scope for view name";
+                }
+                console.log("Changing view", name, scope);
+                scope.changeView(contentsType, resourceIRI);
+            };
+        return {
+            registerView: registerView,
+            changeView: changeView
+        }
+    }])
+
+    // Encapsulates a step through a Hydra API path (there may be other different paths
+    // being displayed in the page at the same time)
+    .directive('duHydraView', ['rdfNs', 'rdfsNs', 'hydraNs', 
+        function (rdfNs, rdfsNs, hydraNs) {
+        return {
+            restrict: 'E',
+            scope: {
+                contentsType: "@contentstype",
+                iri: "@resourceiri",
+                formId: "@formid",
+                viewName: "@viewname"
+            },
+            controller: "HydraViewCtrl",
+            template: '<div> \
+                    <du-hydra-item \
+                        ng-if="contentsType == \'item\'"> \
+                    </du-hydra-item> \
+                    <du-hydra-collection \
+                        ng-if="contentsType == \'collection\'"> \
+                    </du-hydra-collection> \
+                    <div ng-if="contentsType == \'form\'"> \
+                        <du-form></du-form> \
+                    </div> \
+                </div>',
+            link: function(scope, element) {
+            }
+        };
+    }])
+
+    // Controller to manage changing views
+    .controller('HydraViewCtrl', ['$scope', '$window', 'hydraViews',
+        function($scope, $window, hydraViews) {
+            // When navigating, whether to change who page or just this view
+            $scope.doRouteRedirect = true;
+            console.log("HydraViewCtrl loading", $scope.contentsType, $scope.iri, Math.random());
+
+            $scope.$on('changeView', function(evnt, contentsType, resourceIRI) {
+                console.log('changeView', contentsType, resourceIRI);
+                if ($scope.doRouteRedirect) {
+                    $window.location.href = "#/" + contentsType + "/" + encodeURIComponent(resourceIRI);
+                } else {
+                    // $scope.iri = resourceIRI;
+                    // $scope.contentsType = contentsType;
+                    console.log("Manually triggering view load")
+                    $scope.changeView(contentsType, resourceIRI);
+                }
+            });
+
+            $scope.$on('changeFormView', function(evnt, contentsType, formId) {
+                console.log('changeFormView', contentsType, formId);
+                if ($scope.doRouteRedirect) {
+                    $window.location.href = "#/form/" + encodeURIComponent(formId);
+                } else {
+                    $scope.formId = formId;
+                    $scope.contentsType = contentsType;
+                }                
+            });
+
+            $scope.changeView = function (contentsType, resourceIRI) {
+                var oldContentsType = $scope.contentsType;
+                $scope.iri = resourceIRI;
+                $scope.contentsType = contentsType;
+                if (oldContentsType === contentsType) {
+                    // The directive wont update as it's already loaded
+                    // the html and controller for this content type.
+                    // Manually trigger an update.
+                    console.log("Manually triggering resource load...");
+                    $scope.$broadcast("loadResource");
+                }
+            };
+
+            hydraViews.registerView($scope.viewName, $scope);
+    }])
+
+
+    // -----------------------------
+    // SupportedProperty directives
+    // -----------------------------
+
+    .directive('duSupportedPropertyLabel', function() {
+        return {
+            restrict: 'E',
+            scope: {
+                "suppProp": "=suppprop",
+                "suppClass": "=suppclass"
+            },
+            template: '<span class="{{getCssClass()}}">{{getLabel()}}</span>',
+            // template: '<span>{{getLabel()}}</span>',
+            controller: "SupportedPropertyLabelCtrl"
+        };
+    })
+
+    // Controller to manage changing views
+    .controller('SupportedPropertyLabelCtrl', ['$scope', 'jsonldHelper', 'hydraUINs', 
+        'apiDocHelper', 'uiAPIDocHelper',
+        function($scope, jsonldHelper, hydraUINs, apiDocHelper, uiAPIDocHelper) {
+            $scope.getLabel = function () {
+                return apiDocHelper.getLabel($scope.suppProp);
+            };
+
+            $scope.getCssClass = function () {
+                // See if there are any styling overrides
+                var cssClass = "hy-supp-prop-label",
+                    prop = apiDocHelper.getProperty($scope.suppProp),
+                    hydraClassId = $scope.suppClass, 
+                    hydraPropId, uiSuppProp, labelInfo, uiProp, uiCssClass;
+                if ( jsonldHelper.hasId(prop) ) {
+                    hydraPropId = jsonldHelper.getIdValue(prop);
+                    uiSuppProp = uiAPIDocHelper.supportedPropertyOptions(hydraClassId, hydraPropId);
+                    console.log("uiSuppProp", uiSuppProp)
+                    if (uiSuppProp) {
+                        // Look for information about label
+                        labelInfo = uiSuppProp[hydraUINs.labelInfo];
+                        labelInfo = jsonldHelper.removeJSONArray(labelInfo);
+                        if (labelInfo) {
+                            uiCssClass = jsonldHelper.getLiteralValue(labelInfo, hydraUINs.cssClass, null);
+                            console.log("uiCssClass", labelInfo, uiCssClass)
+                            if (uiCssClass) {
+                                cssClass = uiCssClass;
+                            }
+                        }
+                        // uiProp = apiDocHelper.getProperty(uiSuppProp);
+                        // if (uiProp) {
+                        //     uiCssClass = jsonldHelper.getLiteralValue(uiProp, hydraUINs.cssClass, null);
+                        //     console.log("uiCssClass", uiCssClass)
+                        //     if (uiCssClass) {
+                        //         cssClass = uiCssClass;
+                        //     }
+                        // }
+                    }
+                }
+                return cssClass;
+            };
     }])
 
 
@@ -733,19 +1223,24 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
     .directive('duItem', ['$compile', 'rdfNs', 'rdfsNs', 'hydraNs', 
         function ($compile, rdfNs, rdfsNs, hydraNs) {
-        var getTemplate = function (hydraType) {
+        var getTemplate = function (hydraType, swapType) {
             var template;
 
-            if (hydraType === hydraNs.Link) {
-                // ToDo: find out why rdfsNs.label property stopped working in new Controller
+            if (swapType === "form") {
+                template = '<div ng-controller="FormPageItemCtrl"><du-form></du-form></div>'
+            } else if (hydraType === hydraNs.Link) {
                 template = '<div> \
-                    {{getSupportedPropertyLabel(item.suppProp)}} \
-                    <span ng-if="hasGET(item.prop)"> \
-                        <a href="{{hrefURL(item)}}">{{hrefText(item)}}</a> \
-                    </span> \
-                    <span ng-if="hasPOST(item.prop)"> \
-                        <a href="#/form/{{encodeURIComponent(saveForm(\'POST\', item.value, item.prop))}}">Create</a> \
-                    </span> \
+                    <du-supported-property-label \
+                        suppclass="item.suppClass" \
+                        suppprop="item.suppProp"> \
+                    </du-supported-property-label> \
+                    <du-supp-op ng-repeat="suppOp in item.prop[\'http://www.w3.org/ns/hydra/core#supportedOperation\']" \
+                        suppop="suppOp" \
+                        suppclass="item.suppClass" \
+                        resourceiri="item.resourceIRI" \
+                        apidoc="apiDoc" \
+                        cssclass="suppOp._cssClass"> \
+                    </du-supp-op> \
                     </div>';
             } else if (hydraType === rdfNs.Property) {
                 template = '<div>{{item.value}}</div>'
@@ -758,11 +1253,128 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
         return {
             restrict: 'E',
+            // template: '<div ng-if="item._swapType === \'form\'" ng-controller="FormCtrl"><du-form></du-form></div> \
+            //     <div ng-if="item.type === \'http://www.w3.org/ns/hydra/core#Link\'"> \
+            //         {{getSupportedPropertyLabel(item.suppProp)}} \
+            //         <du-supp-op ng-repeat="suppOp in item.prop[\'http://www.w3.org/ns/hydra/core#supportedOperation\']" \
+            //             suppop="suppOp" \
+            //             suppclass="item.suppClass" \
+            //             resourceiri="item.resourceIRI" \
+            //             apidoc="apiDoc"> \
+            //         </du-supp-op> \
+            //     </div> \
+            //     <div ng-if="item.type === \'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property\'"> \
+            //         {{item.value}} \
+            //     </div> \
+            //     <div ng-if="item.type !== \'http://www.w3.org/ns/hydra/core#Link\' && item.type !== \'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property\'"> \
+            //         Unrecognised item type \
+            //     </div>'
             link: function(scope, element) {
-                var template = getTemplate(scope.item.type);
+                // Note: inline template seems to go into an infinite loop
+                // when an 'swap content' inline form is added. 
+                // Using template function avoids this issue.
+                var template = getTemplate(scope.item.type, scope.item._swapType);
                 element.html(template);
                 $compile(element.contents())(scope);
             }
+        };
+    }])
+
+    // Controller to set form id based on a pageItem
+    .controller('FormPageItemCtrl', ['$scope', 
+        function($scope) {
+            $scope.formId = $scope.item._formId;
+    }])
+
+
+    // ---------------------------
+    // SupportedOperation display
+    // ---------------------------
+
+    .directive('duSuppOp', ['$compile', 'rdfNs', 'rdfsNs', 'hydraNs', 
+        function ($compile, rdfNs, rdfsNs, hydraNs) {
+
+        return {
+            restrict: 'E',
+            scope: {
+                suppOp: "=suppop",
+                suppClass: "=suppclass",
+                resourceIRI: "=resourceiri",
+                apiDoc: "=apidoc",
+                cssClass: "=cssclass"
+            },
+            //template: '<span><a href="{{getHref()}}" ng-click="changeView()">{{getLabel()}}</a></span>',
+            template: '<span ng-click="changeView()" class="{{getCssClass()}}">{{getLabel()}}</span>',
+            controller: "SuppOpCtrl",
+            link: function(scope, element) {
+                // var template = getTemplate(scope.item.type);
+                // element.html(template);
+                // $compile(element.contents())(scope);
+            }
+        };
+    }])
+
+    .controller('SuppOpCtrl', ['$scope', '$window', 'jsonldHelper', 
+        'rdfsNs', 'hydraNs', 'hydraHelper', 'apiDocHelper', 'pageBuilder', 'routeResolver',
+        function($scope, $window, jsonldHelper, 
+            rdfsNs, hydraNs, hydraHelper, apiDocHelper, pageBuilder, routeResolver) {
+
+        $scope.getLabel = function () {
+            return apiDocHelper.getLabel($scope.suppOp);
+        };
+
+        $scope.getCssClass = function () {
+            return jsonldHelper.isNotNullOrUndefined($scope.cssClass) ? $scope.cssClass : "hy-supp-prop";
+        };
+
+        $scope.changeView = function () {
+            var suppClass = $scope.suppClass,
+                resourceIRI = $scope.resourceIRI,
+                getPath = routeResolver.routeConfig.getPath,
+                apiDoc = angular.isArray($scope.apiDoc) ? $scope.apiDoc[0] : $scope.apiDoc,
+                suppOp = $scope.suppOp, 
+                method = jsonldHelper.getLiteralValue(suppOp, hydraNs.method),
+                formData = null,
+                saveFormId, formURL, routePath;
+
+            if (method === "GET") {
+                // HTTP GET
+                routePath = getPath(suppClass, suppOp["@id"]);
+                if (routePath != null) {
+                    // User defined view for this SupportedClass and SupportedOp
+                    // Bit of a hack to insert target IRI
+                    // ToDo: move this up to HydraViewCtrl
+                    console.log("Only have custom routes at the moment. Need to make custom views instead.")
+                    $window.location.href = "#" + routePath.replace(":iri*", encodeURIComponent(resourceIRI));
+                } else if (apiDocHelper.supportedOperationReturnsCollection(apiDoc, suppOp)) {
+                    $scope.$emit('changeView', "collection", resourceIRI);
+                } else {
+                    $scope.$emit('changeView', "item", resourceIRI);
+                }
+            } else if (method === "POST" || method === "PUT") {
+                formURL = resourceIRI;
+                saveFormId = pageBuilder.saveForm(apiDoc, suppOp, method, formURL, resourceIRI, formData);
+                $scope.$emit('changeFormView', "form", saveFormId);
+            } else {
+                throw "Unsupported SupportedOperation method: " + String(method);
+            }
+        };
+    }])
+
+
+    // ----------
+    // Item view
+    // ----------
+
+    .directive('duHydraItem', ['rdfNs', 'rdfsNs', 'hydraNs', 
+        function (rdfNs, rdfsNs, hydraNs) {
+        return {
+            restrict: 'E',
+            controller: "ItemViewCtrl",
+            template: '<div ng-init="load()"> \
+                    <h2>{{title}}</h2> \
+                    <du-item ng-repeat="item in pageItems"></du-item> \
+                </div>'
         };
     }])
 
@@ -771,23 +1383,37 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         function($scope, $routeParams, apiResources, jsonldLib, jsonldHelper, 
             rdfsNs, hydraNs, hydraHelper, apiDocHelper, pageBuilder) {
 
-        $scope.iri = decodeURIComponent($routeParams.iri);
-
         $scope.pageData = null;
         $scope.apiDoc = null;
         $scope.title = "";
         $scope.pageItems = [];
 
+        $scope.resetView = function () {
+            $scope.pageData = null;
+            $scope.apiDoc = null;
+            $scope.title = "";
+            $scope.pageItems = [];
+        };
+
         $scope.load = function () {
+            $scope.resetView();
             apiResources.getResource($scope.iri)
                 .then(function (results) { 
                     $scope.pageData = results.data;
-                    return apiResources.getAPIDoc(results.apiDocURL); })
+                    return apiResources.getAPIDoc(results.apiDocURL); 
+                })
                 .then(function (results) {
                     $scope.apiDoc = results;
                     $scope.updatePage();
+                })
+                .catch(function (reason) {
+                    throw "Error getting resource: " + reason;
                 });
         };
+
+        $scope.$on("loadResource", function (evnt) {
+            $scope.load();
+        });
 
         $scope.updatePage = function () {
             var pageData = angular.isArray($scope.pageData) ? $scope.pageData[0] : $scope.pageData,
@@ -808,22 +1434,6 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             }
 
             pageBuilder.addPageItems($scope.pageItems, pageData, apiDoc, pageTypes);
-            //hydraHelper.addPageItems($scope.pageItems, pageData, apiDoc, pageTypes);
-        };
-
-        $scope.saveForm = function (method, formURL, prop) {
-            // Saves the form details to pass to form page
-            var pageData = angular.isArray($scope.pageData) ? $scope.pageData[0] : $scope.pageData,
-                apiDoc = angular.isArray($scope.apiDoc) ? $scope.apiDoc[0] : $scope.apiDoc,
-                // Find the operation in the property
-                suppOp = hydraHelper.getSupportedOperation(prop, method),
-                formData = null;
-
-            if (suppOp == null) {
-                throw "Can't build form, no supported operation in property with the method '" + method + "'";
-            }
-
-            return pageBuilder.saveForm(apiDoc, suppOp, method, formURL, formData);
         };
 
         $scope.getLiteralValue = function (subject, predicate) {
@@ -833,28 +1443,31 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         $scope.getSupportedPropertyLabel = function (suppProp) {
             return apiDocHelper.getSupportedPropertyLabel(suppProp);
         };
+    }])
 
-        $scope.hasGET = function (prop) {
-            // Whether the hydra:property has a GET operation
-            return hydraHelper.hasOperationMethod(prop, "GET");
-        };
-        $scope.hasPOST = function (prop) {
-            // Whether the hydra:property has a POST operation
-            return hydraHelper.hasOperationMethod(prop, "POST");
-        };
 
-        $scope.encodeURIComponent = function (val) {
-            return encodeURIComponent(val);
-        };
+    // ----------------
+    // Collection view
+    // ----------------
 
-        $scope.hrefURL = function (pageItem) {
-            return pageBuilder.pageItemLink(pageItem);
-            //return hydraHelper.pageItemLink(pageItem);
-        };
-
-        $scope.hrefText = function (pageItem) {
-            return pageBuilder.pageItemLinkText(pageItem);
-            //return hydraHelper.pageItemLinkText(pageItem);
+    .directive('duHydraCollection', ['rdfNs', 'rdfsNs', 'hydraNs', 
+        function (rdfNs, rdfsNs, hydraNs) {
+        return {
+            restrict: 'E',
+            controller: "CollectionCtrl",
+            template: '<div ng-init="load()"> \
+                    <h2>{{title}}</h2> \
+                    <du-supp-op ng-repeat="suppOp in suppOps" \
+                        suppop="suppOp" \
+                        suppclass="suppClass" \
+                        resourceiri="iri" \
+                        apidoc="apiDoc" \
+                        cssclass="suppOp._cssClass"> \
+                    </du-supp-op> \
+                    <div ng-repeat="member in members" class="du-member"> \
+                        <du-item ng-repeat="item in member.pageItems"></du-item> \
+                    </div> \
+                </div>'
         };
     }])
 
@@ -863,12 +1476,14 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         function($scope, $routeParams, apiResources, jsonldLib, jsonldHelper, 
             rdfsNs, hydraNs, hydraHelper, apiDocHelper, pageBuilder) {
 
-        $scope.iri = decodeURIComponent($routeParams.iri);
+        // $scope.iri = decodeURIComponent($routeParams.iri);
 
         $scope.pageData = null;
         $scope.apiDoc = null;
         $scope.title = "";
         $scope.members = [];
+        $scope.suppOps = [];
+        $scope.suppClass = "";
 
         $scope.load = function () {
             apiResources.getResource($scope.iri)
@@ -878,6 +1493,9 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 .then(function (results) {
                     $scope.apiDoc = results;
                     $scope.updatePage();
+                })
+                .catch(function (reason) {
+                    throw "Error getting resource: " + reason;
                 });
         };
 
@@ -885,16 +1503,29 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             var pageData = angular.isArray($scope.pageData) ? $scope.pageData[0] : $scope.pageData,
                 membersData = jsonldLib.getValues(pageData, hydraNs.member),
                 apiDoc = angular.isArray($scope.apiDoc) ? $scope.apiDoc[0] : $scope.apiDoc,
-                suppProp, pageItemValue;
+                pageTypes = jsonldLib.getValues(pageData, "@type"),
+                hydraCls = apiDocHelper.findSupportedClass(apiDoc, pageTypes),
+                suppOps, pageItemValue;
 
-            // ToDo: how to find title for a collection?
-            // Set the page title
-            // if (typeof hydraCls[rdfsNs.label] !== 'undefined') {
-            //     $scope.title = jsonldHelper.getLiteralValue(hydraCls, rdfsNs.label);
-            // } else {
-            //     $scope.title = "Untitled";
-            // }
+            $scope.title = apiDocHelper.getLabel(hydraCls, "Collection");
 
+            // Find any SupportedOperations for this class
+            suppOps = jsonldHelper.getValue(hydraCls, hydraNs.supportedOperation);
+            // Store the hydra class for SuppOp
+            if (typeof hydraCls["@id"] !== 'string') {
+                throw "ToDo: get page Hydra Class IRI as string."
+            }
+            $scope.suppClass = hydraCls["@id"];
+            if (suppOps && angular.isArray(suppOps)) {
+                angular.forEach(suppOps, function (suppOp, indx) {
+                    // Multiple SupportedProperties
+                    $scope.suppOps.push(suppOp);
+                });
+            } else if (suppOps && !angular.isArray(suppOps)) {
+                // Single SupportedProperty
+                $scope.suppOps.push(suppOps);
+            }
+            
             angular.forEach(membersData, function (memberData) {
                 var pageTypes = jsonldLib.getValues(memberData, "@type"),
                     hydraCls = apiDocHelper.findSupportedClass(apiDoc, pageTypes),
@@ -906,24 +1537,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 // Create member for page collection
                 member = { pageItems: [] };
                 pageBuilder.addPageItems(member.pageItems, memberData, apiDoc, pageTypes);
-                //hydraHelper.addPageItems(member.pageItems, memberData, apiDoc, pageTypes);
                 $scope.members.push(member);
             });
-        };
-
-        $scope.saveForm = function (method, formURL, prop) {
-            // Saves the form details to pass to form page
-            var pageData = angular.isArray($scope.pageData) ? $scope.pageData[0] : $scope.pageData,
-                apiDoc = angular.isArray($scope.apiDoc) ? $scope.apiDoc[0] : $scope.apiDoc,
-                // Find the operation in the property
-                suppOp = hydraHelper.getSupportedOperation(prop, method),
-                formData = null;
-
-            if (suppOp == null) {
-                throw "Can't build form, no supported operation in property with the method '" + method + "'";
-            }
-
-            return pageBuilder.saveForm(apiDoc, suppOp, method, formURL, formData);
         };
 
         $scope.getLiteralValue = function (subject, predicate) {
@@ -933,90 +1548,229 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         $scope.getSupportedPropertyLabel = function (suppProp) {
             return apiDocHelper.getSupportedPropertyLabel(suppProp);
         };
+    }])
 
-        $scope.hasGET = function (prop) {
-            // Whether the hydra:property has a GET operation
-            return hydraHelper.hasOperationMethod(prop, "GET");
-        };
-        $scope.hasPOST = function (prop) {
-            // Whether the hydra:property has a POST operation
-            return hydraHelper.hasOperationMethod(prop, "POST");
-        };
 
-        $scope.encodeURIComponent = function (val) {
-            return encodeURIComponent(val);
-        };
+    // -----------------------
+    // Resource Shapes - OSLC
+    // -----------------------
 
-        $scope.hrefURL = function (pageItem) {
-            return pageBuilder.pageItemLink(pageItem);
-            //return hydraHelper.pageItemLink(pageItem);
-        };
+    .factory('oslcHelper', ['oslcNs', 'jsonldHelper',
+        function (oslcNs, jsonldHelper) {
 
-        $scope.hrefText = function (pageItem) {
-            return pageBuilder.pageItemLinkText(pageItem);
-            //return hydraHelper.pageItemLinkText(pageItem);
+                // Finds the OSLC Property in resource shape (by matching 
+                // propertyDefinition IRI)
+            var findProperty = function (resourceShape, propIRI) {
+                    var oslcProp = null,
+                        oslcProps = null,
+                        tmpProp, tmpPropDef, tmpPropIRI, i;
+
+                    if (jsonldHelper.isNullOrUndefined(resourceShape)) {
+                        return oslcProp;
+                    }
+                    oslcProps = resourceShape[oslcNs.property];
+                    if (jsonldHelper.isNullOrUndefined(oslcProps) || oslcProps.length === 0) {
+                        return oslcProp;
+                    }
+                    for (i = 0; i < oslcProps.length; i++) {
+                        tmpProp = oslcProps[i];
+                        tmpPropDef = tmpProp[oslcNs.propertyDefinition];
+                        if (!jsonldHelper.hasId(tmpPropDef)) {
+                            continue;
+                        }
+                        tmpPropIRI = jsonldHelper.getIdValue(tmpPropDef);
+                        if (tmpPropIRI === propIRI) {
+                            oslcProp = tmpProp;
+                            break;
+                        }
+                    }
+                    return oslcProp;
+                },
+                hasAllowedValue = function (resourceShape, propIRI) {
+                    var oslcProp = findProperty(resourceShape, propIRI);
+                    if (oslcProp == null) {
+                        return false;
+                    }
+                    return jsonldHelper.isNotNullOrUndefined(oslcProp[oslcNs.allowedValue]);
+                },
+                getAllowedValueList = function (resourceShape, propIRI) {
+                    var oslcProp = findProperty(resourceShape, propIRI),
+                        allowedValueList = [];
+                    if (oslcProp == null) {
+                        return allowedValueList;
+                    }
+                    allowedValueList = oslcProp[oslcNs.allowedValue];
+                    return allowedValueList;
+                };
+            return {
+                findProperty: findProperty,
+                hasAllowedValue: hasAllowedValue,
+                getAllowedValueList: getAllowedValueList
+            }
+    }])
+
+
+    // ----------
+    // Form view
+    // ----------
+
+    .directive('duForm', ['hydraNs', 
+        function (hydraNs) {
+
+        return {
+            restrict: 'E',
+            // scope: {
+            //     suppOp: "=suppop",
+            //     suppClass: "=suppclass",
+            //     resourceIRI: "=resourceiri",
+            //     apiDoc: "=apidoc",
+            //     formURL: "=formurl",
+            //     formMethod: "=formmethod"
+            // },
+            template: '<div ng-init="load()"> \
+                    <h2>{{title}}</h2> \
+                    <ng-form name="du-form-hydra" action="{{formURL}}" method="{{formMethod}}"> \
+                    <div ng-repeat="suppProp in suppProps"> \
+                        <!-- Hidden input --> \
+                        <input ng-if="suppProp._hidden" \
+                            name="{{getSupportedPropertyPropertyId(suppProp)}}" \
+                            type="hidden" \
+                            data-ng-model="suppProp.data"> \
+                        <!-- Visible input --> \
+                        <div ng-if="!suppProp._hidden"> \
+                            <label for="{{getSupportedPropertyPropertyId(suppProp)}}"> \
+                                {{getSupportedPropertyLabel(suppProp)}} \
+                            </label> \
+                            <!-- Text input --> \
+                            <input ng-if="!suppProp._hasChoice" \
+                                name="{{getSupportedPropertyPropertyId(suppProp)}}" \
+                                type="text" \
+                                data-ng-model="suppProp.data"> \
+                            <!-- Drop down input --> \
+                            <select ng-if="suppProp._hasChoice" \
+                                name="{{getSupportedPropertyPropertyId(suppProp)}}" \
+                                type="text" \
+                                data-ng-model="suppProp.data" \
+                                ng-options="choice.name for choice in suppProp._choices"> \
+                            </select> \
+                        </div> \
+                    </div> \
+                    <du-item ng-repeat="item in formItems"></du-item> \
+                    <div><button ng-click="submitForm()">Add</button></div> \
+                    <div du-form-feedback></div> \
+                </ng-form> \
+                </div>',
+            controller: 'FormCtrl',
+            //controller: "SuppOpCtrl",
+            link: function(scope, element) {
+                // var template = getTemplate(scope.item.type);
+                // element.html(template);
+                // $compile(element.contents())(scope);
+            }
         };
     }])
 
     .controller('FormCtrl', ['$scope', '$routeParams', '$http', 'jsonldLib', 'jsonldHelper', 
-        'rdfsNs', 'hydraNs', 'hydraExtNs', 'hydraHelper', 'apiDocHelper', 'formStore', 
-        'pageBuilder', '$sce', 'apiResources',
+        'rdfsNs', 'hydraNs', 'hydraExtNs', 'oslcNs', 'hydraHelper', 'apiDocHelper', 'oslcHelper', 
+        'formStore', 'pageBuilder', '$sce', 'apiResources',
         function($scope, $routeParams, $http, jsonldLib, jsonldHelper, 
-            rdfsNs, hydraNs, hydraExtNs, hydraHelper, apiDocHelper, formStore, 
-            pageBuilder, $sce, apiResources) {
+            rdfsNs, hydraNs, hydraExtNs, oslcNs, hydraHelper, apiDocHelper, oslcHelper,
+            formStore, pageBuilder, $sce, apiResources) {
 
-        $scope.formId = $routeParams.formId;
+        //$scope.formId = $routeParams.formId;
 
         $scope.formData = null;
         $scope.formMethod = null;
         $scope.formURL = null;
         $scope.suppClass = null;
+        $scope.instanceShape = null;
 
         $scope.title = "";
         $scope.formItems = [];
 
-        $scope.hydraForm = {};
-        $scope.hydraForm.data = {};
-        $scope.hydraForm.data.fields = [];
+        $scope.suppProps = [];
 
-        $scope.resetPage = function () {
+        $scope.resetAll = function () {
+            // Reset data
+            $scope.formData = null;
+            $scope.formMethod = null;
+            $scope.formURL = null;
+            $scope.suppClass = null;
+            $scope.instanceShape = null;
+
+            // Reset display items
+            $scope.title = "";
+            //$scope.suppClass = null;
             $scope.formItems = [];
-            $scope.hydraForm = {};
-            $scope.hydraForm.data = {};
-            $scope.hydraForm.data.fields = [];
+            $scope.suppProps = [];
         };
 
         $scope.load = function () {
+            console.log("Loading form")
+            $scope.resetAll();
             var formId = $scope.formId,
             formData = formStore.getFormData(formId);
 
             $scope.formData = formData.data;
             $scope.formMethod = formData.method;
+            console.log("Form ResourceIRI:", formData.resourceIRI)
+            $scope.resourceIRI = formData.resourceIRI;
             $scope.formURL = $sce.trustAsResourceUrl(formData.url);
             $scope.suppClass = formData.suppClass;
 
-            $scope.updatePage();
+            console.log("looking for resource iri")
+            // If there's no form data and a resource IRI, try to fetch form data from server
+            if (jsonldHelper.isNullOrUndefined($scope.formData) && 
+                jsonldHelper.isNotNullOrUndefined($scope.resourceIRI)) {
+                console.log("found resource iri", $scope.resourceIRI)
+                // Fetch resource state
+                // ToDo: check whether the form operation is an
+                // 'add' operation, in which case no data will be
+                // available (?)
+                apiResources
+                    .getResource($scope.resourceIRI)
+                    .then(function (data) {
+                        console.log("got form resource")
+                        console.log(data)
+                        $scope.formData = data.data;
+                        $scope.updatePage();
+                    })
+                    .catch(function (reason) {
+                        // throw "Error getting form resource: " + reason;
+                        // Resource data unavailable - continue without
+                        // form data
+                        // ToDo: ideally catch 404 here and continue if
+                        // it's encountered. Otherwise let user know about
+                        // error.
+                        $scope.updatePage();
+                    });
+            } else {
+                $scope.updatePage();
+            }
         };
 
-        populateChoices = function (suppProp) {
+        // DEPRECATED (in favour of OSLC)
+        populateChoices = function (suppProp, selectedValue) {
             var valuesConstraint = suppProp[hydraExtNs.valuesConstraint],
-                collectionIRI, memberValueProperty, memberLabelProperty;
-
-            console.log("Choices form data")
-            console.log($scope.formData)
+                collectionIRI, memberValueProperty, memberLabelProperty, isId;
 
             valuesConstraint = jsonldHelper.removeJSONArray(valuesConstraint);
 
             if (valuesConstraint[hydraExtNs.possibleValue]) {
+                // Hard coded values for values list.
                 // Values to use as hydra-ext:value and rdfs:label pairs
                 var collection = valuesConstraint[hydraExtNs.possibleValue];
                 angular.forEach(collection, function (member, index) {
                     var name = jsonldHelper.getLiteralValue(member, rdfsNs.label),
                         value = jsonldHelper.getLiteralValue(member, hydraExtNs.value);
                     suppProp._choices.push({name: name, value: value});
+                    if (value === selectedValue) {
+                        suppProp.data = suppProp._choices[suppProp._choices.length - 1];
+                    }
                 });
 
             } else if (valuesConstraint[hydraExtNs.valuesPagedCollection]) {
+                // Use a Hydra PageCollection for values
                 collectionIRI = jsonldHelper.removeJSONArray(valuesConstraint[hydraExtNs.valuesPagedCollection]);
                 memberValueProperty = jsonldHelper.getLiteralValue(valuesConstraint, hydraExtNs.memberValueProperty);
                 memberLabelProperty = jsonldHelper.getLiteralValue(valuesConstraint, hydraExtNs.memberLabelProperty);
@@ -1029,6 +1783,15 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 if (jsonldHelper.hasId(collectionIRI)) {
                     collectionIRI = jsonldHelper.getIdValue(collectionIRI);
                 }
+
+                // ToDo: find better way of identifying whether the value should be an
+                // @id (i.e. a pointer to a resource). E.g. look up info in Hydra doc 
+                // and check if @type = @id
+                isId = memberValueProperty === '@id';
+                if (isId) {
+                    suppProp._convertValueToId = true;
+                }
+
                 apiResources.getResource(collectionIRI)
                     .then(function (data) {
                         var collection = jsonldHelper.removeJSONArray(data.data);
@@ -1036,10 +1799,13 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                             var name = jsonldHelper.getLiteralValue(member, memberLabelProperty),
                                 value = member[memberValueProperty];
                             suppProp._choices.push({name: name, value: value});
+                            if (value === selectedValue) {
+                                suppProp.data = suppProp._choices[suppProp._choices.length - 1];
+                            }
                         });
                     })
                     .catch(function (reason) {
-                        throw "Error getting value options: " + reason;
+                        throw "Error getting choice options: " + reason;
                     });
                 
             } else {
@@ -1051,26 +1817,61 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             var suppProps, 
                 rdfType = $scope.suppClass["@id"],
                 typeSuppProp = {}, 
-                typeProp;
+                typeProp,
+                existingData = jsonldHelper.removeJSONArray($scope.formData);
 
-            $scope.resetPage();
+            $scope.title = apiDocHelper.getLabel($scope.suppClass, "Untitled");
+
+            // Find out if the data has OSLC constaints (like allowed values)
+            if (existingData && jsonldHelper.isNotNullOrUndefined(existingData[oslcNs.instanceShape])) {
+                $scope.resourceShape = existingData[oslcNs.instanceShape];
+                $scope.resourceShape = angular.isArray($scope.resourceShape) ? $scope.resourceShape[0] : $scope.resourceShape;
+            }
 
             suppProps = jsonldLib.getValues($scope.suppClass, hydraNs.supportedProperty);
-            // console.log("form items");
-            // console.log(suppProps);
 
             // Note: used following as basis for dynamic form elements:
             // http://jsfiddle.net/langdonx/6H8Xx/2/
             angular.forEach(suppProps, function (suppProp, key) {
-                // Collections
-                if ($scope.hasValueConstraint(suppProp)) {
+                var prop, propIRI, existingValue, displayValue;
+
+                // Get existing data value
+                prop = apiDocHelper.getProperty(suppProp);
+                propIRI = jsonldHelper.getIdValue(prop);
+                if (existingData) {
+                    existingValue = jsonldHelper.getValue(existingData, propIRI);
+                }
+
+                // Set curent value (if available)
+                if (existingValue) {
+                    // ToDo: determine what value to display using 
+                    // SupportedProperty info?
+                    if (jsonldHelper.hasValue(existingValue)) {
+                        displayValue = existingValue["@value"];
+                    } else if (jsonldHelper.hasId(existingValue)) {
+                        displayValue = existingValue["@id"];
+                    } else {
+                        // Don't know how to extract existing value. Error?
+                    }
+                }
+                suppProp.data = displayValue;
+
+                // Drop down choices
+                if (oslcHelper.hasAllowedValue($scope.resourceShape, propIRI)) {
                     suppProp._hasChoice = true;
                     suppProp._choices = [];
-                    populateChoices(suppProp);
+                    populateAllowedValue(suppProp, $scope.resourceShape, propIRI, displayValue);
+                } else if ($scope.hasValueConstraint(suppProp)) {
+                    // DEPRECATED
+                    // Drop down choices (OLD VERSION)
+                    suppProp._hasChoice = true;
+                    suppProp._choices = [];
+                    populateChoices(suppProp, displayValue);
                 } else {
                     suppProp._hasChoice = false;
                 }
-                $scope.hydraForm.data.fields.push(suppProp);
+
+                $scope.suppProps.push(suppProp);
             });
 
             // Add a SupportedProperty for the @type
@@ -1081,7 +1882,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             // Use model binding to attach value
             typeSuppProp.data = rdfType;
             typeSuppProp._hidden = true; // Make this hidden
-            $scope.hydraForm.data.fields.push(typeSuppProp);
+            $scope.suppProps.push(typeSuppProp);
         };
 
         $scope.submitForm = function () {
@@ -1091,10 +1892,11 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 method = $scope.formMethod,
                 requestHeaders = {"Content-Type": "application/json"};
 
-            angular.forEach($scope.hydraForm.data.fields, function (suppProp, key) {
+            angular.forEach($scope.suppProps, function (suppProp, key) {
                 var fieldName = $scope.getSupportedPropertyPropertyId(suppProp),
                     fieldValue = suppProp.data,
-                    isSelectField = suppProp._hasChoice;
+                    isSelectField = suppProp._hasChoice,
+                    convertValueToId = suppProp._convertValueToId;
                 if (typeof fieldValue !== 'undefined') {
                     if (isSelectField) {
                         // HTML select field
@@ -1103,10 +1905,13 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         // Regular input like HTML input
                         formData[fieldName] = fieldValue;
                     }
+                    if (convertValueToId) {
+                        formData[fieldName] = {"@id": formData[fieldName]}
+                    }
                 }                    
             });
-            console.log("formData");
-            console.log(formData);
+            // console.log("formData");
+            // console.log(formData);
 
             // Add the context
             //if (apiDoc["@context"]) {
@@ -1141,7 +1946,6 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                                     console.log("Has return operation");
                                     op = jsonldHelper.removeJSONArray(op);
                                     var method = jsonldHelper.getLiteralValue(op, hydraNs.method);
-                                    console.log("method: " + method);
                                     
                                     // Hack: get api doc
                                     // ToDo: whole of this section needs to be
@@ -1154,9 +1958,10 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                                                 throw "Form GET redirect not implemented"
                                             } else if (method === "POST") {
                                                 var formURL = data["iri"], // Hack to get Form's POST url
+                                                    // Assume resource to be edited is the same as form post url
+                                                    resourceIRI = formURL,
                                                     formData = null;
-                                                $scope.formId = pageBuilder.saveForm(apiDoc, op, method, formURL, formData);
-                                                //$scope.formId = formStore.saveFormData(method, formURL, formData, payloadClass);
+                                                $scope.formId = pageBuilder.saveForm(apiDoc, op, method, formURL, resourceIRI, formData);
                                                 $scope.load();
                                             } else {
                                                 throw "Unknown method in Form response operation."
@@ -1182,6 +1987,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                     //console.log(status);
                     $scope.formFeedback = "Error: " + status;
                 });
+
+            //$scope.load();
         };
 
         $scope.getSupportedPropertyLabel = function (suppProp) {
@@ -1197,7 +2004,32 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             return jsonldHelper.getIdValue(prop, "@id")
         };
 
+        // Add page drop down options from OSLC allowedValue list
+        populateAllowedValue = function (suppProp, resourceShape, propIRI, selectedValue) {
+            var allowedValueList = oslcHelper.getAllowedValueList(resourceShape, propIRI);
+            if (jsonldHelper.isNullOrUndefined(allowedValueList)) {
+                throw "Expected value list for allowed values.";
+            }
+            angular.forEach(allowedValueList, function (member, index) {
+                var name, value;
+                // ToDo: support id objects
+                if (!jsonldHelper.hasValue(member)) {
+                    throw "Expected allowed value to have @value attribute."
+                }
+                value = jsonldHelper.getLiteralValue(member, "@value", "-- Missing --");
+                // ToDo: support labels for values
+                name = value;
+                suppProp._choices.push({name: name, value: value});
+                if (value === selectedValue) {
+                    suppProp.data = suppProp._choices[suppProp._choices.length - 1];
+                }
+            });
+        }
+
+        // DEPRECATED (in favour of OSLC)
         $scope.hasValueConstraint = function (suppProp) {
+            // Note: this uses custom DU extensions - switch to 
+            // RDF Shapes implementation
             // Whether the input method has a list of predefined choices
             if (suppProp[hydraExtNs.valuesConstraint]) {
                 return true;
