@@ -107,6 +107,156 @@
             }
         }(this.routeConfig);
 
+
+
+
+        // Route path coercion
+        // Bit of a hack to reroute paths on an ad hoc basic
+        this.routePathRedirect = function () {
+            var pathInfo = {},
+
+                generateKey = function (contentsType, resourceIRIPattern) {
+                    return contentsType + "_" + resourceIRIPattern;
+                }
+
+                // Registers a function to be apply to the route
+                // path if it's encountered. A reg ex expression is used
+                // to identify matching patterns. The function will take
+                // the current route path and change it to a new one
+                registerPathRedirect = function (contentsType, resourceIRIPattern, doPageRedirect, redirectContentsType) { //, resourceIRIFunc) {
+                    var key = generateKey(contentsType, resourceIRIPattern.toString());
+                    pathInfo[key] = {
+                        'contentsType': contentsType,
+                        'redirectContentsType': redirectContentsType,
+                        'resourceIRIPattern': resourceIRIPattern,
+                        'doPageRedirect': doPageRedirect
+                        // 'func': resourceIRIFunc
+                    };
+                },
+
+                redirectInfo = function (contentsType, resourceIRI) {
+                    var redirectInfo = {
+                            doPageRedirect: null,
+                            redirectContentsType: contentsType
+                            //,
+                            // redirectResourceIRI: resourceIRI
+                        }, 
+                        key, regExPattern; //, resourceIRIFunc;
+                    for (key in pathInfo) {
+                        // console.log("testing pattern", key)
+                        regExPattern = pathInfo[key].resourceIRIPattern;
+                        if (resourceIRI.match(regExPattern)) {
+                            // console.log("testing pattern matched")
+                            // resourceIRIFunc = pathInfo[key].func;
+                            redirectInfo.doPageRedirect = pathInfo[key].doPageRedirect;
+                            // redirectInfo.redirectResourceIRI = resourceIRIFunc(resourceIRI);
+                            redirectInfo.redirectContentsType = pathInfo[key].redirectContentsType;
+                            return redirectInfo;
+                        }
+                    }
+                    return redirectInfo;
+                };
+
+                // Whether to do a page redirect for the given route info
+                // doPageRedirect = function (contentsType, resourceIRI) {
+                //     var key = generateKey(contentsType, resourceIRI);
+                //     return pathInfo[key].doPageRedirect;
+                // },
+
+                // // Takes a route path and applies any of the configured alterations
+                // // to it. If there are no matches, returns the original path unchanged.
+                // reformatedResourceIRI = function (contentsType, resourceIRI) {
+                //     var key = generateKey(contentsType, resourceIRI);
+                //     if (pathInfo[key]) {
+                //         return pathInfo[key].resourceIRIFunc(resourceIRI);
+                //     } else {
+                //         return resourceIRI;
+                //     }
+                // };
+
+                // Takes a route path and applies any of the configured alterations
+                // to it. If there are no matches, returns the original path unchanged.
+                // substitutePath = function (routePath) {
+                //     var key, regExPattern, routePathAlterationFunc;
+                //     for (key in pathPatterns) {
+                //         console.log("testing pattern", key)
+                //         regExPattern = pathPatterns[key].pattern;
+                //         if (routePath.match(regExPattern)) {
+                //             console.log("testing pattern matched")
+                //             routePathAlterationFunc = pathPatterns[key].func;
+                //             return routePathAlterationFunc(routePath);
+                //         }
+                //     }
+                //     return routePath;
+                // };
+
+            return {
+                registerPathRedirect: registerPathRedirect,
+                redirectInfo: redirectInfo
+                // doPageRedirect: doPageRedirect,
+                // reformatedResourceIRI: reformatedResourceIRI
+            };
+        }();
+
+        // // Bit of a hack to reroute paths on an ad hoc basic
+        // this.routePathSubstitution = function () {
+        //     var pathPatterns = {},
+
+        //         // Registers a function to be apply to the route
+        //         // path if it's encountered. A reg ex expression is used
+        //         // to identify matching patterns. The function will take
+        //         // the current route path and change it to a new one
+        //         registerPattern = function (regExPattern, routePathAlterationFunc) {
+        //             var key = regExPattern.toString();
+        //             pathPatterns[key] = {
+        //                 'pattern': regExPattern,
+        //                 'func': routePathAlterationFunc
+        //             }
+        //         },
+
+        //         // Takes a route path and applies any of the configured alterations
+        //         // to it. If there are no matches, returns the original path unchanged.
+        //         substitutePath = function (routePath) {
+        //             var key, regExPattern, routePathAlterationFunc;
+        //             for (key in pathPatterns) {
+        //                 console.log("testing pattern", key)
+        //                 regExPattern = pathPatterns[key].pattern;
+        //                 if (routePath.match(regExPattern)) {
+        //                     console.log("testing pattern matched")
+        //                     routePathAlterationFunc = pathPatterns[key].func;
+        //                     return routePathAlterationFunc(routePath);
+        //                 }
+        //             }
+        //             return routePath;
+        //         };
+
+        //     return {
+        //         registerPattern: registerPattern,
+        //         substitutePath: substitutePath
+        //     };
+        // }();
+
+        // this.routePathSubstitution = function (routePathSubstitutionConfig) {
+
+        //     var resolve = function (classIRI, suppOpIRI) {
+        //             var routeDef = {};
+        //             routeDef.template = routeConfig.getTemplate(classIRI, suppOpIRI);
+        //             routeDef.controller = routeConfig.getController(classIRI, suppOpIRI);
+        //             return routeDef;
+        //         },
+
+        //         resolveFromPath = function (path) {
+        //             var viewDetails = routeConfig.getViewDetails(path),
+        //                 classIRI = viewDetails[0],
+        //                 suppOpIRI = viewDetails[1];
+        //             return resolve(classIRI, suppOpIRI);
+        //         };
+
+        //     return {
+        //         resolveFromPath: resolveFromPath
+        //     }
+        // }(this.routeConfig);
+
     };
 
     var servicesApp = angular.module('duRouteResolverService', []);
@@ -142,30 +292,71 @@ angular.module('duConfig', ['duRouteResolverService'])
     // Configure the styling APIDoc (for specifying UI display options)
     .provider('uiAPIDoc', function () {
         this.uiAPIDoc = {};
+        this.isExpanded = false;
 
         this.$get = function () {
             return this;
         };
 
         this.getUIAPIDoc = function () {
+            // var _this = this;
+            // if (this.isExpanded) {
+            //     return this.uiAPIDoc;
+            // } else {
+            //     jsonld.expand(this.uiAPIDoc, function(err, expanded) {
+            //         if (err) {
+            //             throw err;
+            //         }
+            //         expanded = angular.isArray(expanded) ? expanded[0] : expanded;
+            //         _this.uiAPIDoc = expanded;
+            //         _this.isExpanded = true;
+            //         console.log("Expanded UI API Doc", _this.uiAPIDoc)
+            //         return _this.uiAPIDoc;
+            //     });
+            // }
             return this.uiAPIDoc;
         };
 
+        this.getUIAPIDocUnexpanded = function () {
+            return this.uiAPIDoc;
+        };
+
+        // this.getUIAPIDocPromise = function () {
+        //     var deferred = $q.defer();
+        //     // Expand the context
+        //     jsonld.promises.expand(data)
+        //         .then(function (expanded) {
+        //             deferred.resolve(expanded);
+        //         }, 
+        //         function (err) {
+        //             deferred.reject("There was an error expanding the Resource data: " + err.name + " " + err.message);
+        //             $log.error("There was an error expanding the Resource data: " + err.name + " " + err.message);
+        //         });
+
+        //     return deferred.promise;
+        //     // return jsonld.promises.expand(this.uiAPIDoc);
+        // };
+
         this.setUIAPIDoc = function (uiAPIDoc) {
-            _this = this;
             // ToDo: preferably have jsonld dependency in a
             // AngularJS wrapper like with duHydraClient
+            var _this = this;
+            this.uiAPIDoc = uiAPIDoc;
+            this.isExpanded = false;
+            
 
             // ToDo: AngularJS wont know to wait until the
             // expand callback is returned. Is there a way
             // to make sure config isn't complete until the
             // callback is returned?
+            console.log("Expanding UI API Doc")
             jsonld.expand(uiAPIDoc, function(err, expanded) {
                 if (err) {
                     throw err;
                 }
                 expanded = angular.isArray(expanded) ? expanded[0] : expanded;
                 _this.uiAPIDoc = expanded;
+                console.log("Expanded UI API Doc", _this.uiAPIDoc)
             });
             this.uiAPIDoc = uiAPIDoc;
         };
@@ -176,8 +367,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     // -------
     // Config
     // -------
-    .config(['$routeProvider', 'entryPointProvider', 'routeResolverProvider', 
-        function($routeProvider, entryPointProvider, routeResolverProvider) {
+    .config(['$routeProvider', '$httpProvider', 'entryPointProvider', 'routeResolverProvider', 
+        function($routeProvider, $httpProvider, entryPointProvider, routeResolverProvider) {
 
         // Setup routes
         var route = routeResolverProvider.route;
@@ -188,19 +379,27 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 controller: 'ResourceRouteCtrl',
                 template: '<du-hydra-view contentstype="item" \
                     resourceiri="{{iri}}" \
-                    viewname="default"></du-hydra-view>'
+                    viewname="default" \
+                    dorouteredirect="true"> \
+                    </du-hydra-view>'
             })
             // Route for collection view
             .when('/collection/:iri*', {
                 controller: 'ResourceRouteCtrl',
                 template: '<du-hydra-view contentstype="collection" \
                     resourceiri="{{iri}}" \
-                    viewname="default"></du-hydra-view>'
+                    viewname="default" \
+                    dorouteredirect="true"> \
+                    </du-hydra-view>'
             })
             // Route for form view
             .when('/form/:formId*', {
                 controller: 'FormRouteCtrl',
-                template: '<du-hydra-view contentstype="form" formid="{{formId}}"></du-hydra-view>'
+                template: '<du-hydra-view contentstype="form" \
+                    formid="{{formId}}" \
+                    viewname="default" \
+                    dorouteredirect="true"> \
+                    </du-hydra-view>'
             })
             // Homepage
             .when('/', {
@@ -287,7 +486,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             PostForm: hydraUIBase + "PostForm",
             orderId: hydraUIBase + "orderId",
             cssClass: hydraUIBase + "cssClass",
-            labelInfo: hydraUIBase + "labelInfo"
+            labelInfo: hydraUIBase + "labelInfo",
+            wrapperTag: hydraUIBase + "wrapperTag"
         };
     })
 
@@ -455,9 +655,13 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             // Finds the SupportedProperty in given SupportedClass
             findSupportedPropertyInClass = function (cls, propType) {
                 var apiDocSuppProp = null,
-                    suppProps = cls[hydraNs.supportedProperty],
-                    typesToCheck;
+                    suppProps, typesToCheck;
 
+                if (cls == null) {
+                    return apiDocSuppProp;
+                }
+
+                suppProps = cls[hydraNs.supportedProperty];
                 if (suppProps) {
                     angular.forEach(suppProps, function (suppProp) {
                         typesToCheck = angular.isArray(propType) ? propType : [propType];
@@ -581,6 +785,24 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
                 return isSubClass;
             },
+            // Finds a SupportedOperation with the specified HTTP method from a 
+            // list of SupportedProperties
+            findSupportedOperationWithMethodFromList = function (suppOps, method) {
+                var suppOp = null;
+                if (jsonldHelper.isNullOrUndefined(suppOps)) {
+                    return suppOp;
+                }
+                angular.forEach(suppOps, function (tmpSuppOp, ind) {
+                    var methodVal = jsonldHelper.getLiteralValue(tmpSuppOp, hydraNs.method);
+                    if (jsonldHelper.isNotNullOrUndefined(methodVal)) {
+                        if (methodVal === method) {
+                            suppOp = tmpSuppOp;
+                            // ToDo: inefficiency as loop doesn't exit
+                        }
+                    }
+                });
+                return suppOp;
+            },
             // Finds a SupportedOperation in the SupportedProperty
             // with the given form method
             findSupportedOperationWithMethod = function (suppProp, method) {
@@ -596,15 +818,16 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 if (jsonldHelper.isNullOrUndefined(suppOps)) {
                     return suppOp;
                 }
-                angular.forEach(suppOps, function (tmpSuppOp, ind) {
-                    var methodVal = jsonldHelper.getLiteralValue(tmpSuppOp, hydraNs.method);
-                    if (jsonldHelper.isNotNullOrUndefined(methodVal)) {
-                        if (methodVal === method) {
-                            suppOp = tmpSuppOp;
-                            // ToDo: inefficiency as loop doesn't exit
-                        }
-                    }
-                });
+                suppOp = findSupportedOperationWithMethodFromList(suppOps, method);
+                // angular.forEach(suppOps, function (tmpSuppOp, ind) {
+                //     var methodVal = jsonldHelper.getLiteralValue(tmpSuppOp, hydraNs.method);
+                //     if (jsonldHelper.isNotNullOrUndefined(methodVal)) {
+                //         if (methodVal === method) {
+                //             suppOp = tmpSuppOp;
+                //             // ToDo: inefficiency as loop doesn't exit
+                //         }
+                //     }
+                // });
                 return suppOp;
             },
             // Whether the hydra SupportedOpertation returns a collection
@@ -638,7 +861,9 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             getLabel: getLabel,
             findSupportedClass: findSupportedClass,
             findSupportedProperty: findSupportedProperty,
+            findSupportedPropertyInClass: findSupportedPropertyInClass,
             findSupportedOperationWithMethod: findSupportedOperationWithMethod,
+            findSupportedOperationWithMethodFromList: findSupportedOperationWithMethodFromList,
             getSupportedPropertyLabel: getSupportedPropertyLabel,
             isSubClassOf: isSubClassOf,
             supportedOperationReturnsCollection: supportedOperationReturnsCollection
@@ -716,8 +941,6 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         }
                     }
                 }
-
-                console.log("link apiDocIRI", apiDocIRI)
 
                 if (apiDocIRI == null) {
                     // ToDo: turn this into an error?
@@ -865,13 +1088,45 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             var savedFormId = formStore.saveFormData(method, formURL, resourceIRI, formData, payloadClass);
             return savedFormId;
         },
+
+        // Applies styling attributes to SupportedOperations to indicate
+        // how they should be displayed in the UI
+        applySuppOpsStylingAttributes = function (suppOps, uiSuppOps) {
+            // suppPropUI: the UI styling information
+            if (jsonldHelper.isNullOrUndefined(suppOps) || jsonldHelper.isNullOrUndefined(uiSuppOps)) {
+                return;
+            }
+            angular.forEach(suppOps, function (suppOp) {
+                var method = jsonldHelper.getLiteralValue(suppOp, hydraNs.method),
+                    uiSuppOp = apiDocHelper.findSupportedOperationWithMethodFromList(uiSuppOps, method),
+                    cssClass;
+                if (uiSuppOp) {
+                    cssClass = jsonldHelper.getLiteralValue(uiSuppOp, hydraUINs.cssClass, null);
+                    if (jsonldHelper.isNotNullOrUndefined(cssClass)) {
+                        suppOp._cssClass = cssClass;
+                    }
+                }
+            });
+        },
+
+        addPageItems = function (pageItemCollection, pageData, apiDoc, pageTypes) {
+            var suppClassIRI = pageTypes[0];
+            uiAPIDocHelper.findUISupportedClass(suppClassIRI)
+                .then(function (uiSuppClass) {
+                    addPageItemsWithStyling(pageItemCollection, pageData, apiDoc, pageTypes, uiSuppClass)
+                })
+                .catch(function (reason) {
+                    throw "Error when finding UI SupportedClass. " + reason;
+                });
+        },
+
         // Puts Hydra and page data into a wrapper to make things easier for 
         // the UI to consume
-        addPageItems = function (pageItemCollection, pageData, apiDoc, pageTypes) {
+        addPageItemsWithStyling = function (pageItemCollection, pageData, apiDoc, pageTypes, uiSuppClass) {
             // pageItemCollection is the collection that will be added to
             pageItems = [];
             angular.forEach(pageData, function (itemValue, key) {
-                var value, suppProp, prop, propTypes, propType, propId, resourceIRI, suppClass,
+                var value, suppProp, prop, propTypes, propType, propId, resourceIRI, suppClassIRI,
                     propertyValue, pageItem;
 
                 if (key.indexOf("@") === 0) {
@@ -895,23 +1150,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         }
                     }
                     propId = jsonldHelper.hasId(prop) ? jsonldHelper.getIdValue(prop) : null;
-                    // propType = prop["@type"];
-                    // propType = propType && angular.isArray(propType) ? propType[0] : propType;
-
-                    // console.log('prop["@type"]')
-                    // console.log(propType)
-                    //if (suppProp["@type"])
-
-                    // if (jsonldHelper.hasValue(value)) {
-                    //     value = angular.isArray(value) && value.length > 0 ? value[0] : value;
-                    //     pageItemValue = jsonldHelper.getLiteralValue(value, "@value");
-                    // } else {
-                    //     pageItemValue = jsonldHelper.getIdValue(value);
-                    // }
 
                     // Store resource IRI
-                    // console.log("looking to store resource iri for key " + key)
-                    //if (jsonldHelper.hasId(value)) {
                     if (propType === hydraNs.Link) {
                         resourceIRI = jsonldHelper.getIdValue(value);
                         propertyValue = null;
@@ -926,31 +1166,28 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         resourceIRI = null;
                         propertyValue = "Unknown";
                     }
-                    // console.log("link resourceIRI")
-                    // console.log(resourceIRI)
 
                     // Place the information about Hydra Link/Property into
                     // a convenient wrapper for the UI
-                    suppClass = pageTypes[0];
+                    suppClassIRI = pageTypes[0];
                     pageItem = {
                         "type": propType,
                         "value": propertyValue,
                         "resourceIRI": resourceIRI,
                         "prop": prop,
                         "suppProp": suppProp,
-                        "suppClass": suppClass
+                        "suppClass": suppClassIRI
                     };
 
                     // Find out if there's any UI styling overrides
-                    var suppPropUI = uiAPIDocHelper.supportedPropertyOptions(suppClass, propId);
+                    var suppPropUI = apiDocHelper.findSupportedPropertyInClass(uiSuppClass, propId);
                     if (suppPropUI) {
                         var orderId = jsonldHelper.getLiteralValue(suppPropUI, hydraUINs.orderId, null),
+                            wrapperTag = suppPropUI[hydraUINs.wrapperTag],
                             uiProp = apiDocHelper.getProperty(suppPropUI),
                             uiSuppOps = uiProp[hydraNs.supportedOperation],
                             swapContentInfo = suppPropUI[hydraUINs.swapContent],
-                            suppOps;
-
-                        console.log("Supp op ui", uiProp[hydraNs.supportedOperation])
+                            suppOps, wrapperTagCssClass;
 
                         // Ordering of SupportedProperties
                         if (jsonldHelper.isNotNullOrUndefined(orderId)) {
@@ -960,21 +1197,18 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         if (uiSuppOps) {
                             // There is some information about SupportedOperations so
                             // markup the suppOps in pageItem
-                            console.log("Has UI suppOp info")
                             suppOps = prop[hydraNs.supportedOperation];
-                            angular.forEach(suppOps, function (suppOp) {
-                                var method = jsonldHelper.getLiteralValue(suppOp, hydraNs.method),
-                                    uiSuppOp = apiDocHelper.findSupportedOperationWithMethod(suppPropUI, method),
-                                    cssClass;
-                                console.log("Using suppOp info", uiSuppOp)
-                                if (uiSuppOp) {
-                                    cssClass = jsonldHelper.getLiteralValue(uiSuppOp, hydraUINs.cssClass, null);
-                                    if (jsonldHelper.isNotNullOrUndefined(cssClass)) {
-                                        console.log("CssClass", cssClass)
-                                        suppOp._cssClass = cssClass;
-                                    }
-                                }
-                            });
+                            applySuppOpsStylingAttributes(suppOps, uiSuppOps);
+                        }
+
+                        if (wrapperTag) {
+                            // Information about tag which encloses SupportedProperty and it's
+                            // supported items
+                            wrapperTag = jsonldHelper.removeJSONArray(wrapperTag);
+                            wrapperTagCssClass = jsonldHelper.getLiteralValue(wrapperTag, hydraUINs.cssClass, null);
+                            if (jsonldHelper.isNotNullOrUndefined(wrapperTagCssClass)) {
+                                pageItem._wrapperTagCssClass = wrapperTagCssClass;
+                            }
                         }
 
                         if (swapContentInfo) {
@@ -1002,7 +1236,6 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         
                     }
 
-                    // pageItemCollection.push(pageItem);
                     pageItems.push(pageItem);
                 }
             });
@@ -1022,7 +1255,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
         return {
             saveForm: saveForm,
-            addPageItems: addPageItems
+            addPageItems: addPageItems,
+            applySuppOpsStylingAttributes: applySuppOpsStylingAttributes
         }
     }])
 
@@ -1033,19 +1267,93 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     // Helper for looking up styling information contained in the
     // optional config setting. Uses a structure similar to Hydra
     // APIDoc, but with UI styling options instead.
-    .factory('uiAPIDocHelper', ['uiAPIDoc', 'hydraNs', 'apiDocHelper',
-        function (uiAPIDoc, hydraNs, apiDocHelper) {
+    .factory('uiAPIDocHelper', ['$log', '$q', 'uiAPIDoc', 'hydraNs', 'jsonldHelper', 'jsonldLib', 'apiDocHelper',
+        function ($log, $q, uiAPIDoc, hydraNs, jsonldHelper, jsonldLib, apiDocHelper) {
 
         var supportedPropertyOptions = function (hydraClassId, hydraPropId) {
                 var apiDocUI = uiAPIDoc.getUIAPIDoc(),
                     suppPropOptions = apiDocHelper.findSupportedProperty(apiDocUI, hydraClassId, hydraPropId);
-                // console.log("suppProp:");
-                // console.log(suppProp);
                 return suppPropOptions || null;
+            },
+            // Promise to return expanded form of UI API Doc (for styling)
+            getUIAPIDocExpanded = function () {
+                console.log("ToDo: cache expanded API Doc");
+                var uiAPIDocUnexpanded = uiAPIDoc.getUIAPIDocUnexpanded(),
+                    deferred = $q.defer(),
+                    jsonLdPromises = jsonld.promises();
+                jsonLdPromises.expand(uiAPIDocUnexpanded)
+                    .then(function (expanded) {
+                        expanded = angular.isArray(expanded) ? expanded[0] : expanded;
+                        deferred.resolve(expanded);
+                    }, 
+                    function (err) {
+                        deferred.reject("There was an error expanding the UI API Doc data: " + err.name + " " + err.message);
+                        $log.error("There was an error expanding the UI API Doc data: " + err.name + " " + err.message);
+                    });
+                return deferred.promise;
+            },
+            // Promise to find UI styling SupportedClass
+            findUISupportedClass = function (hydraClassIRI) {
+                var deferred = $q.defer(),
+                    uiSuppClass;
+                getUIAPIDocExpanded()
+                    .then(function (uiAPIDoc) {
+                        try {
+                            uiSuppClass = apiDocHelper.findSupportedClass(uiAPIDoc, hydraClassIRI);
+                        } catch (err) {
+                            deferred.reject("There was an error finding SupportedProperty in the UI API Doc data: " + err.name + " " + err.message);
+                            $log.error("There was an error finding SupportedProperty in the UI API Doc data: " + err.name + " " + err.message);
+                        }
+                        deferred.resolve(uiSuppClass);
+                    })
+                    .catch(function (reason) {
+                        deferred.reject("There was an error finding UI SupportedClass in the UI API Doc data: " + reason);
+                        $log.error("There was an error finding UI SupportedClass in the UI API Doc data: " + reason);
+                    });
+                return deferred.promise;
+            },
+            getSupportedPropertyOptions = function (hydraClassId, hydraPropId) {
+                var suppPropOptions = null,
+                    deferred = $q.defer();
+                getUIAPIDocExpanded()
+                    .then(function(expanded) {
+                        console.log("Got UI API Doc via promise")
+                        try {
+                            suppPropOptions = apiDocHelper.findSupportedProperty(expanded, hydraClassId, hydraPropId);
+                        } catch (err) {
+                            deferred.reject("There was an error finding SupportedProperty in the UI API Doc data: " + err.name + " " + err.message);
+                            $log.error("There was an error finding SupportedProperty in the UI API Doc data: " + err.name + " " + err.message);
+                        }
+                        suppPropOptions = suppPropOptions || null;
+                        deferred.resolve(suppPropOptions);
+                    })
+                    .catch(function (reason) {
+                        deferred.reject("There was an error expanding the UI API Doc data: " + err.name + " " + err.message);
+                        $log.error("There was an error expanding the UI API Doc data: " + err.name + " " + err.message);
+                    });
+
+                return deferred.promise;
+            },
+            // Gets the styling info for SupportedOperations from the styling API Doc
+            // for the specified Hydra Class
+            getUIClassSupportedOperations = function (hydraClassId) {
+                var uiApiDoc = uiAPIDoc.getUIAPIDoc(),
+                    uiClass = apiDocHelper.findSupportedClass(uiApiDoc, hydraClassId),
+                    stylingSuppOps = [],
+                    uiProp;
+
+                if (jsonldHelper.isNullOrUndefined(uiClass)) {
+                    return stylingSuppOps;
+                }
+                stylingSuppOps = uiClass[hydraNs.supportedOperation];
+                return stylingSuppOps;
             };
 
         return {
-            supportedPropertyOptions: supportedPropertyOptions
+            supportedPropertyOptions: supportedPropertyOptions,
+            getSupportedPropertyOptions: getSupportedPropertyOptions,
+            getUIClassSupportedOperations: getUIClassSupportedOperations,
+            findUISupportedClass: findUISupportedClass
         };
     }])
 
@@ -1055,7 +1363,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     // -------------
 
     // Service for managing Hydra views
-    .factory('hydraViews', ['jsonldLib', function (jsonldLib) {
+    .factory('hydraViews', ['jsonldLib', 'apiDocHelper', 
+        function (jsonldLib, apiDocHelper) {
         var views = {},
             registerView = function (name, scope) {
                 console.log("Registering view", name)
@@ -1068,10 +1377,20 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 }
                 console.log("Changing view", name, scope);
                 scope.changeView(contentsType, resourceIRI);
+            },
+            // Returns the type of SupportedOperation: 'collection' for Hydra collections
+            // or 'item' for non-collection resources
+            viewType = function (apiDoc, suppOp) {
+                var contentType = "item";
+                if (apiDocHelper.supportedOperationReturnsCollection(apiDoc, suppOp)) {
+                    contentType = "collection";
+                }
+                return contentType;
             };
         return {
             registerView: registerView,
-            changeView: changeView
+            changeView: changeView,
+            viewType: viewType
         }
     }])
 
@@ -1085,7 +1404,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 contentsType: "@contentstype",
                 iri: "@resourceiri",
                 formId: "@formid",
-                viewName: "@viewname"
+                viewName: "@viewname",
+                doRouteRedirect: "@dorouteredirect"
             },
             controller: "HydraViewCtrl",
             template: '<div> \
@@ -1105,16 +1425,44 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     }])
 
     // Controller to manage changing views
-    .controller('HydraViewCtrl', ['$scope', '$window', 'hydraViews',
-        function($scope, $window, hydraViews) {
+    .controller('HydraViewCtrl', ['$scope', '$window', '$route', 'hydraViews', 'routeResolver',
+        function($scope, $window, $route, hydraViews, routeResolver) {
             // When navigating, whether to change who page or just this view
-            $scope.doRouteRedirect = true;
-            console.log("HydraViewCtrl loading", $scope.contentsType, $scope.iri, Math.random());
+            //$scope.doRouteRedirect = true;
+            // console.log("HydraViewCtrl loading", $scope.contentsType, $scope.iri, Math.random());
 
             $scope.$on('changeView', function(evnt, contentsType, resourceIRI) {
-                console.log('changeView', contentsType, resourceIRI);
-                if ($scope.doRouteRedirect) {
-                    $window.location.href = "#/" + contentsType + "/" + encodeURIComponent(resourceIRI);
+                var doRouteRedirect = typeof $scope.doRouteRedirect === 'string' ? $scope.doRouteRedirect.toLowerCase() === 'true' : $scope.doRouteRedirect,
+                    nextRoutePath;
+                // console.log("Changing view message", doRouteRedirect, typeof doRouteRedirect)
+
+                // Bit of a hack to allow interception of automatic redirects:
+                // console.log("pre redirect route path", contentsType, resourceIRI)
+                var pathInfo = routeResolver.routePathRedirect.redirectInfo(contentsType, resourceIRI);
+                if (String(pathInfo.doPageRedirect) !== 'null') {
+                    // console.log("New do redirect ", pathInfo.doPageRedirect)
+                    doRouteRedirect = pathInfo.doPageRedirect;
+                }
+                contentsType = pathInfo.redirectContentsType;
+                // console.log("final route path:", contentsType, resourceIRI);
+
+                if (doRouteRedirect) {
+                    nextRoutePath = "#/" + contentsType + "/" + encodeURIComponent(resourceIRI);
+                    // nextRoutePath = routeResolver.routePathSubstitution.substitutePath(nextRoutePath);
+                    // Do any substitutions on next url
+
+                    // Workaround - force AngularJS to reload if the destination page is the same
+                    // See http://stackoverflow.com/questions/21125914/angularjs-route-controller-not-reloading
+                    // console.log("current", $scope.contentsType, $scope.iri);
+                    // if (contentsType === $scope.contentsType && resourceIRI === $scope.iri) {
+                    //     console.log("Forcing page reload")
+                    //     $route.reload();
+                    // } else {
+                    //     // console.log(routeResolver);
+                    //     // console.log(routeResolver.routePathSubstitution.substitutePath(nextRoutePath));
+                    //     $window.location.href = nextRoutePath;
+                    // }
+                    $window.location.href = nextRoutePath;
                 } else {
                     // $scope.iri = resourceIRI;
                     // $scope.contentsType = contentsType;
@@ -1124,7 +1472,6 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             });
 
             $scope.$on('changeFormView', function(evnt, contentsType, formId) {
-                console.log('changeFormView', contentsType, formId);
                 if ($scope.doRouteRedirect) {
                     $window.location.href = "#/form/" + encodeURIComponent(formId);
                 } else {
@@ -1154,6 +1501,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     // SupportedProperty directives
     // -----------------------------
 
+    // Displays the label for a SupportedProperty
     .directive('duSupportedPropertyLabel', function() {
         return {
             restrict: 'E',
@@ -1162,6 +1510,22 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 "suppClass": "=suppclass"
             },
             template: '<span class="{{getCssClass()}}">{{getLabel()}}</span>',
+            // template: '<span>{{getLabel()}}</span>',
+            controller: "SupportedPropertyLabelCtrl"
+        };
+    })
+
+    // This is for when a SupportedProperty is a literal value, rather than
+    // a link.
+    .directive('duSupportedPropertyValue', function() {
+        return {
+            restrict: 'E',
+            scope: {
+                "suppProp": "=suppprop",
+                "suppClass": "=suppclass",
+                "val": "=supppropval"
+            },
+            template: '<span class="{{getCssClass()}}">{{val}}</span>',
             // template: '<span>{{getLabel()}}</span>',
             controller: "SupportedPropertyLabelCtrl"
         };
@@ -1183,27 +1547,20 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                     hydraPropId, uiSuppProp, labelInfo, uiProp, uiCssClass;
                 if ( jsonldHelper.hasId(prop) ) {
                     hydraPropId = jsonldHelper.getIdValue(prop);
+                    console.log("Reduce number of calls to UI SupportedProperty")
+                    // ToDo: ideally UI SuppProp would be read from pre-loaded
+                    // UI SupportedClass. This gets called many times
                     uiSuppProp = uiAPIDocHelper.supportedPropertyOptions(hydraClassId, hydraPropId);
-                    console.log("uiSuppProp", uiSuppProp)
                     if (uiSuppProp) {
                         // Look for information about label
                         labelInfo = uiSuppProp[hydraUINs.labelInfo];
                         labelInfo = jsonldHelper.removeJSONArray(labelInfo);
                         if (labelInfo) {
                             uiCssClass = jsonldHelper.getLiteralValue(labelInfo, hydraUINs.cssClass, null);
-                            console.log("uiCssClass", labelInfo, uiCssClass)
                             if (uiCssClass) {
                                 cssClass = uiCssClass;
                             }
                         }
-                        // uiProp = apiDocHelper.getProperty(uiSuppProp);
-                        // if (uiProp) {
-                        //     uiCssClass = jsonldHelper.getLiteralValue(uiProp, hydraUINs.cssClass, null);
-                        //     console.log("uiCssClass", uiCssClass)
-                        //     if (uiCssClass) {
-                        //         cssClass = uiCssClass;
-                        //     }
-                        // }
                     }
                 }
                 return cssClass;
@@ -1229,7 +1586,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             if (swapType === "form") {
                 template = '<div ng-controller="FormPageItemCtrl"><du-form></du-form></div>'
             } else if (hydraType === hydraNs.Link) {
-                template = '<div> \
+                template = '<div class="{{getWrapperTagCssClass()}}"> \
                     <du-supported-property-label \
                         suppclass="item.suppClass" \
                         suppprop="item.suppProp"> \
@@ -1243,7 +1600,13 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                     </du-supp-op> \
                     </div>';
             } else if (hydraType === rdfNs.Property) {
-                template = '<div>{{item.value}}</div>'
+                template = '<div> \
+                    <du-supported-property-value \
+                        suppclass="item.suppClass" \
+                        suppprop="item.suppProp" \
+                        supppropval="item.value"> \
+                    </du-supported-property-value> \
+                    </div>'
             } else {
                 throw "Unrecognised Hydra type " + String(hydraType);
             }
@@ -1253,23 +1616,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
 
         return {
             restrict: 'E',
-            // template: '<div ng-if="item._swapType === \'form\'" ng-controller="FormCtrl"><du-form></du-form></div> \
-            //     <div ng-if="item.type === \'http://www.w3.org/ns/hydra/core#Link\'"> \
-            //         {{getSupportedPropertyLabel(item.suppProp)}} \
-            //         <du-supp-op ng-repeat="suppOp in item.prop[\'http://www.w3.org/ns/hydra/core#supportedOperation\']" \
-            //             suppop="suppOp" \
-            //             suppclass="item.suppClass" \
-            //             resourceiri="item.resourceIRI" \
-            //             apidoc="apiDoc"> \
-            //         </du-supp-op> \
-            //     </div> \
-            //     <div ng-if="item.type === \'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property\'"> \
-            //         {{item.value}} \
-            //     </div> \
-            //     <div ng-if="item.type !== \'http://www.w3.org/ns/hydra/core#Link\' && item.type !== \'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property\'"> \
-            //         Unrecognised item type \
-            //     </div>'
-            link: function(scope, element) {
+            controller: 'DUItemCtrl',
+            link: function (scope, element) {
                 // Note: inline template seems to go into an infinite loop
                 // when an 'swap content' inline form is added. 
                 // Using template function avoids this issue.
@@ -1280,9 +1628,20 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
     }])
 
+    .controller('DUItemCtrl', ['$scope', 'jsonldHelper',
+        function ($scope, jsonldHelper) {
+            $scope.getWrapperTagCssClass = function () {
+                if (jsonldHelper.isNotNullOrUndefined($scope.item) &&
+                    jsonldHelper.isNotNullOrUndefined($scope.item._wrapperTagCssClass)) {
+                    return $scope.item._wrapperTagCssClass;
+                }
+                return "hy-supp-prop-wrapper";
+            }
+    }])
+
     // Controller to set form id based on a pageItem
     .controller('FormPageItemCtrl', ['$scope', 
-        function($scope) {
+        function ($scope) {
             $scope.formId = $scope.item._formId;
     }])
 
@@ -1314,17 +1673,17 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
     }])
 
-    .controller('SuppOpCtrl', ['$scope', '$window', 'jsonldHelper', 
-        'rdfsNs', 'hydraNs', 'hydraHelper', 'apiDocHelper', 'pageBuilder', 'routeResolver',
-        function($scope, $window, jsonldHelper, 
-            rdfsNs, hydraNs, hydraHelper, apiDocHelper, pageBuilder, routeResolver) {
+    .controller('SuppOpCtrl', ['$scope', '$window', 'jsonldHelper', 'rdfsNs', 'hydraNs', 
+        'hydraHelper', 'hydraViews', 'apiDocHelper', 'pageBuilder', 'routeResolver',
+        function($scope, $window, jsonldHelper, rdfsNs, hydraNs, 
+            hydraHelper, hydraViews, apiDocHelper, pageBuilder, routeResolver) {
 
         $scope.getLabel = function () {
             return apiDocHelper.getLabel($scope.suppOp);
         };
 
         $scope.getCssClass = function () {
-            return jsonldHelper.isNotNullOrUndefined($scope.cssClass) ? $scope.cssClass : "hy-supp-prop";
+            return jsonldHelper.isNotNullOrUndefined($scope.cssClass) ? $scope.cssClass : "hy-supp-op";
         };
 
         $scope.changeView = function () {
@@ -1335,7 +1694,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 suppOp = $scope.suppOp, 
                 method = jsonldHelper.getLiteralValue(suppOp, hydraNs.method),
                 formData = null,
-                saveFormId, formURL, routePath;
+                saveFormId, formURL, routePath, contentType;
 
             if (method === "GET") {
                 // HTTP GET
@@ -1346,11 +1705,15 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                     // ToDo: move this up to HydraViewCtrl
                     console.log("Only have custom routes at the moment. Need to make custom views instead.")
                     $window.location.href = "#" + routePath.replace(":iri*", encodeURIComponent(resourceIRI));
-                } else if (apiDocHelper.supportedOperationReturnsCollection(apiDoc, suppOp)) {
-                    $scope.$emit('changeView', "collection", resourceIRI);
                 } else {
-                    $scope.$emit('changeView', "item", resourceIRI);
-                }
+                    contentType = hydraViews.viewType(apiDoc, suppOp);
+                    $scope.$emit('changeView', contentType, resourceIRI);
+                } 
+                // else if (apiDocHelper.supportedOperationReturnsCollection(apiDoc, suppOp)) {
+                //     $scope.$emit('changeView', "collection", resourceIRI);
+                // } else {
+                //     $scope.$emit('changeView', "item", resourceIRI);
+                // }
             } else if (method === "POST" || method === "PUT") {
                 formURL = resourceIRI;
                 saveFormId = pageBuilder.saveForm(apiDoc, suppOp, method, formURL, resourceIRI, formData);
@@ -1412,6 +1775,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
 
         $scope.$on("loadResource", function (evnt) {
+            console.log("Calling load for resource")
             $scope.load();
         });
 
@@ -1472,9 +1836,9 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     }])
 
     .controller('CollectionCtrl', ['$scope', '$routeParams', 'apiResources', 'jsonldLib', 'jsonldHelper', 
-        'rdfsNs', 'hydraNs', 'hydraHelper', 'apiDocHelper', 'pageBuilder',
+        'rdfsNs', 'hydraNs', 'hydraHelper', 'apiDocHelper', 'uiAPIDocHelper', 'pageBuilder',
         function($scope, $routeParams, apiResources, jsonldLib, jsonldHelper, 
-            rdfsNs, hydraNs, hydraHelper, apiDocHelper, pageBuilder) {
+            rdfsNs, hydraNs, hydraHelper, apiDocHelper, uiAPIDocHelper, pageBuilder) {
 
         // $scope.iri = decodeURIComponent($routeParams.iri);
 
@@ -1499,31 +1863,40 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 });
         };
 
+        $scope.$on("loadResource", function (evnt) {
+            console.log("Calling load for resource collection")
+            $scope.load();
+        });
+
         $scope.updatePage = function () {
             var pageData = angular.isArray($scope.pageData) ? $scope.pageData[0] : $scope.pageData,
                 membersData = jsonldLib.getValues(pageData, hydraNs.member),
                 apiDoc = angular.isArray($scope.apiDoc) ? $scope.apiDoc[0] : $scope.apiDoc,
                 pageTypes = jsonldLib.getValues(pageData, "@type"),
                 hydraCls = apiDocHelper.findSupportedClass(apiDoc, pageTypes),
-                suppOps, pageItemValue;
+                hydraClsName, suppOps, pageItemValue, uiSuppOps;
 
             $scope.title = apiDocHelper.getLabel(hydraCls, "Collection");
 
-            // Find any SupportedOperations for this class
-            suppOps = jsonldHelper.getValue(hydraCls, hydraNs.supportedOperation);
             // Store the hydra class for SuppOp
             if (typeof hydraCls["@id"] !== 'string') {
                 throw "ToDo: get page Hydra Class IRI as string."
             }
-            $scope.suppClass = hydraCls["@id"];
-            if (suppOps && angular.isArray(suppOps)) {
+            hydraClsName = hydraCls["@id"];
+            $scope.suppClass = hydraClsName;
+
+            // Find any SupportedOperations for this class
+            suppOps = jsonldHelper.getValue(hydraCls, hydraNs.supportedOperation);
+            if (suppOps) {
+                suppOps = angular.isArray(suppOps) ? suppOps : [suppOps];
+
+                // Markup suppOps with styling info
+                uiSuppOps = uiAPIDocHelper.getUIClassSupportedOperations(hydraClsName);
+                pageBuilder.applySuppOpsStylingAttributes(suppOps, uiSuppOps);
+
                 angular.forEach(suppOps, function (suppOp, indx) {
-                    // Multiple SupportedProperties
                     $scope.suppOps.push(suppOp);
                 });
-            } else if (suppOps && !angular.isArray(suppOps)) {
-                // Single SupportedProperty
-                $scope.suppOps.push(suppOps);
             }
             
             angular.forEach(membersData, function (memberData) {
@@ -1628,7 +2001,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
             //     formMethod: "=formmethod"
             // },
             template: '<div ng-init="load()"> \
-                    <h2>{{title}}</h2> \
+                    <h2 class="tmp-form-title">{{title}}</h2> \
                     <ng-form name="du-form-hydra" action="{{formURL}}" method="{{formMethod}}"> \
                     <div ng-repeat="suppProp in suppProps"> \
                         <!-- Hidden input --> \
@@ -1656,7 +2029,7 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                         </div> \
                     </div> \
                     <du-item ng-repeat="item in formItems"></du-item> \
-                    <div><button ng-click="submitForm()">Add</button></div> \
+                    <div><button ng-click="submitForm()">{{tmpButtonLabel}}</button></div> \
                     <div du-form-feedback></div> \
                 </ng-form> \
                 </div>',
@@ -1671,11 +2044,11 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
     }])
 
     .controller('FormCtrl', ['$scope', '$routeParams', '$http', 'jsonldLib', 'jsonldHelper', 
-        'rdfsNs', 'hydraNs', 'hydraExtNs', 'oslcNs', 'hydraHelper', 'apiDocHelper', 'oslcHelper', 
-        'formStore', 'pageBuilder', '$sce', 'apiResources',
+        'rdfsNs', 'hydraNs', 'hydraExtNs', 'hydraViews', 'oslcNs', 'hydraHelper', 
+        'apiDocHelper', 'oslcHelper', 'formStore', 'pageBuilder', '$sce', 'apiResources',
         function($scope, $routeParams, $http, jsonldLib, jsonldHelper, 
-            rdfsNs, hydraNs, hydraExtNs, oslcNs, hydraHelper, apiDocHelper, oslcHelper,
-            formStore, pageBuilder, $sce, apiResources) {
+            rdfsNs, hydraNs, hydraExtNs, hydraViews, oslcNs, hydraHelper, 
+            apiDocHelper, oslcHelper, formStore, pageBuilder, $sce, apiResources) {
 
         //$scope.formId = $routeParams.formId;
 
@@ -1689,6 +2062,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         $scope.formItems = [];
 
         $scope.suppProps = [];
+
+        $scope.tmpButtonLabel = "";
 
         $scope.resetAll = function () {
             // Reset data
@@ -1706,23 +2081,21 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
         };
 
         $scope.load = function () {
-            console.log("Loading form")
             $scope.resetAll();
             var formId = $scope.formId,
             formData = formStore.getFormData(formId);
 
             $scope.formData = formData.data;
             $scope.formMethod = formData.method;
-            console.log("Form ResourceIRI:", formData.resourceIRI)
             $scope.resourceIRI = formData.resourceIRI;
             $scope.formURL = $sce.trustAsResourceUrl(formData.url);
             $scope.suppClass = formData.suppClass;
 
-            console.log("looking for resource iri")
+            // console.log("looking for resource iri", formData.resourceIRI)
             // If there's no form data and a resource IRI, try to fetch form data from server
             if (jsonldHelper.isNullOrUndefined($scope.formData) && 
                 jsonldHelper.isNotNullOrUndefined($scope.resourceIRI)) {
-                console.log("found resource iri", $scope.resourceIRI)
+                // console.log("found resource iri", $scope.resourceIRI)
                 // Fetch resource state
                 // ToDo: check whether the form operation is an
                 // 'add' operation, in which case no data will be
@@ -1730,8 +2103,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 apiResources
                     .getResource($scope.resourceIRI)
                     .then(function (data) {
-                        console.log("got form resource")
-                        console.log(data)
+                        // console.log("got form resource")
+                        // console.log(data)
                         $scope.formData = data.data;
                         $scope.updatePage();
                     })
@@ -1748,6 +2121,11 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 $scope.updatePage();
             }
         };
+
+        $scope.$on("loadResource", function (evnt) {
+            console.log("Calling load for form")
+            $scope.load();
+        });
 
         // DEPRECATED (in favour of OSLC)
         populateChoices = function (suppProp, selectedValue) {
@@ -1821,6 +2199,28 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 existingData = jsonldHelper.removeJSONArray($scope.formData);
 
             $scope.title = apiDocHelper.getLabel($scope.suppClass, "Untitled");
+
+            // Tmp hack for button label
+            console.log($scope.suppClass)
+            if ($scope.suppClass) {
+                var tmpClsName = $scope.suppClass["@id"] ? String($scope.suppClass["@id"]) : "";
+                switch (tmpClsName) {
+                    case "http://0.0.0.0:6543/hydra/api-doc#CellAddBefore":
+                        $scope.tmpButtonLabel = "Add cell before";
+                        break;
+                    case "http://0.0.0.0:6543/hydra/api-doc#CellAddAfter":
+                        $scope.tmpButtonLabel = "Add cell after";
+                        break;
+                    case "http://0.0.0.0:6543/hydra/api-doc#GGJSStat":
+                    case "http://0.0.0.0:6543/hydra/api-doc#DataTableAndFieldsSelect":
+                        $scope.tmpButtonLabel = "Apply";
+                        break;
+                    default:
+                        $scope.tmpButtonLabel = "Add";
+                        break;
+                }
+            }
+            
 
             // Find out if the data has OSLC constaints (like allowed values)
             if (existingData && jsonldHelper.isNotNullOrUndefined(existingData[oslcNs.instanceShape])) {
@@ -1925,8 +2325,10 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                 data: jsonData, 
                 headers: requestHeaders})
                 .success(function(data, status, headers, config) {
-                    console.log("Got data back from post");
-                    console.log(data);
+                    // console.log("Got data back from post");
+                    // console.log(data);
+
+                    console.log("form status", data, status, typeof status)
 
                     // Look at response and decide what to do next
                     // ToDo: this is a hacky way of finding out what to do next.
@@ -1945,7 +2347,8 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                                 if (op) {
                                     console.log("Has return operation");
                                     op = jsonldHelper.removeJSONArray(op);
-                                    var method = jsonldHelper.getLiteralValue(op, hydraNs.method);
+                                    var method = jsonldHelper.getLiteralValue(op, hydraNs.method),
+                                        next_iri = data["iri"]; // Hack to get next resource IRI
                                     
                                     // Hack: get api doc
                                     // ToDo: whole of this section needs to be
@@ -1953,15 +2356,20 @@ angular.module('duHydraClient', ['ngRoute', 'duConfig', 'duRouteResolverService'
                                     console.log("Remove form POST results hack.")
                                     apiResources.getAPIDoc('/hydra/api-doc')
                                         .then(function (results) {
-                                            var apiDoc = jsonldHelper.removeJSONArray(results);
+                                            var apiDoc = jsonldHelper.removeJSONArray(results),
+                                                contentType;
                                             if (method === "GET") {
-                                                throw "Form GET redirect not implemented"
+                                                // throw "Form GET redirect not implemented"
+                                                // $scope.iri = next_iri;
+                                                contentType = hydraViews.viewType(apiDoc, op);
+                                                $scope.$emit('changeView', contentType, next_iri);
                                             } else if (method === "POST") {
-                                                var formURL = data["iri"], // Hack to get Form's POST url
+                                                var formURL = next_iri, // Hack to get Form's POST url
                                                     // Assume resource to be edited is the same as form post url
                                                     resourceIRI = formURL,
                                                     formData = null;
                                                 $scope.formId = pageBuilder.saveForm(apiDoc, op, method, formURL, resourceIRI, formData);
+                                                // ToDo: replace $scope.load() with load broadcast message
                                                 $scope.load();
                                             } else {
                                                 throw "Unknown method in Form response operation."
